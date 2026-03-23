@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Glitch Art Palette</title>
+  <style>
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #141414;
+      font-family: "SF Mono", "Fira Mono", "Consolas", monospace;
+    }
+
+    canvas {
+      display: block;
+      cursor: none;
+    }
+
+    /* ── Toolbar (left vertical panel) ── */
+    #toolbar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: 100;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+      padding: 18px 14px 18px;
+      background: rgba(10, 10, 10, 0.88);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border-right: 1px solid rgba(255, 255, 255, 0.06);
+      width: 185px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    #toolbar .label {
+      color: rgba(255, 255, 255, 0.3);
+      font-size: 9px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      user-select: none;
+      display: block;
+      margin-top: 6px;
+      margin-bottom: 4px;
+    }
+
+    #toolbar .divider {
+      width: 100%;
+      height: 1px;
+      background: rgba(255, 255, 255, 0.08);
+      margin: 4px 0;
+      flex-shrink: 0;
+    }
+
+    /* Shared interactive controls */
+    #toolbar select,
+    #toolbar button {
+      appearance: none;
+      -webkit-appearance: none;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      outline: none;
+      height: 30px;
+      padding: 0 10px;
+      width: 100%;
+      text-align: left;
+    }
+
+    #toolbar select:hover,
+    #toolbar button:hover {
+      background: rgba(255, 255, 255, 0.11);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    #toolbar select:focus,
+    #toolbar button:focus-visible {
+      border-color: rgba(120, 180, 255, 0.5);
+    }
+
+    #toolbar select {
+      padding-right: 28px;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='rgba(255,255,255,0.3)'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+    }
+
+    /* Upload label styled as button */
+    #upload-label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 30px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      color: #e8e8e8;
+      font-family: inherit;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    #upload-label:hover {
+      background: rgba(255, 255, 255, 0.11);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+
+    #file-input {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    /* Sliders */
+    .slider-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .slider-row input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      appearance: none;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 2px;
+      outline: none;
+      cursor: pointer;
+      border: none;
+      padding: 0;
+    }
+
+    .slider-row input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .slider-row input[type="range"]::-moz-range-thumb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.8);
+      box-shadow: 0 0 4px rgba(255, 255, 255, 0.25);
+      border: none;
+      cursor: pointer;
+    }
+
+    .slider-row input[type="range"]:hover::-webkit-slider-thumb,
+    .slider-row input[type="range"]:hover::-moz-range-thumb {
+      background: #fff;
+    }
+
+    .slider-val {
+      color: rgba(255, 255, 255, 0.4);
+      font-size: 10px;
+      min-width: 32px;
+      text-align: right;
+      user-select: none;
+    }
+
+    /* Shape toggle */
+    #shape-group {
+      display: flex;
+      gap: 6px;
+    }
+
+    #shape-group button {
+      flex: 1;
+      font-size: 11px;
+      height: 28px;
+      padding: 0 6px;
+      text-align: center;
+    }
+
+    #shape-group button.active,
+    #toolbar button.active {
+      background: rgba(255, 255, 255, 0.18);
+      border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Background color picker */
+    #bg-color {
+      width: 100%;
+      height: 30px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      cursor: pointer;
+      padding: 3px 4px;
+    }
+
+    /* Save button accent */
+    #save-btn {
+      border-color: rgba(120, 180, 255, 0.25);
+      color: rgba(160, 210, 255, 0.9);
+      text-align: center;
+    }
+
+    #save-btn:hover {
+      background: rgba(120, 180, 255, 0.1);
+      border-color: rgba(120, 180, 255, 0.4);
+    }
+
+    /* ── No-image placeholder hint ── */
+    #hint {
+      position: fixed;
+      top: 50%;
+      left: calc(185px + (100vw - 185px) / 2);
+      transform: translate(-50%, -50%);
+      color: rgba(255, 255, 255, 0.15);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      pointer-events: none;
+      user-select: none;
+      text-align: center;
+      line-height: 1.7;
+    }
+
+    #hint.hidden {
+      display: none;
+    }
+
+    /* ── Brush cursor indicator ── */
+    #brush-cursor {
+      position: fixed;
+      pointer-events: none;
+      border-radius: 50%;
+      border: 1px solid rgba(255, 255, 255, 0.55);
+      box-shadow:
+        0 0 0 1px rgba(0, 0, 0, 0.4),
+        0 0 8px 2px rgba(255, 255, 255, 0.18);
+      transform: translate(-50%, -50%);
+      z-index: 50;
+      display: none;
+      transition: width 0.12s ease, height 0.12s ease;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Toolbar — left vertical panel -->
+  <div id="toolbar">
+    <span class="label">Brush</span>
+    <select id="brush-select">
+      <option>Pixel Shift</option>
+      <option>Data Noise</option>
+      <option>Signal Bloom</option>
+      <option>Spectral Swap</option>
+      <option>Chromatic Aberration</option>
+      <option>Scan Line</option>
+      <option>Bitcrush</option>
+      <option>Pixel Sort</option>
+    </select>
+
+    <div class="divider"></div>
+
+    <label id="upload-label" for="file-input">Upload Image</label>
+    <input id="file-input" type="file" accept="image/png, image/jpeg" />
+
+    <div class="divider"></div>
+
+    <span class="label">Size</span>
+    <div class="slider-row">
+      <input id="size-slider" type="range" min="25" max="300" value="100" step="5" />
+      <span id="size-value" class="slider-val">100%</span>
+    </div>
+
+    <span class="label">Intensity</span>
+    <div class="slider-row">
+      <input id="intensity-slider" type="range" min="0" max="100" value="100" step="5" />
+      <span id="intensity-value" class="slider-val">100%</span>
+    </div>
+
+    <span class="label">Shape</span>
+    <div id="shape-group">
+      <button id="shape-circle" class="active">Circle</button>
+      <button id="shape-square">Square</button>
+    </div>
+
+    <div class="divider"></div>
+
+    <span class="label">Live Mode</span>
+    <button id="live-btn">Live: OFF</button>
+
+    <span class="label">Speed</span>
+    <div class="slider-row">
+      <input id="live-speed-slider" type="range" min="1" max="10" value="5" step="1" />
+      <span id="live-speed-value" class="slider-val">5</span>
+    </div>
+
+    <div class="divider"></div>
+
+    <span class="label">Background</span>
+    <input id="bg-color" type="color" value="#141414" />
+
+    <div class="divider"></div>
+
+    <button id="undo-btn">Undo</button>
+    <button id="clear-btn">Clear</button>
+    <button id="save-btn">Save</button>
+
+    <div class="divider"></div>
+
+    <span class="label" style="line-height:1.6;">
+      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear &nbsp;·&nbsp; L live
+    </span>
+  </div>
+
+  <!-- Brush size indicator — floats above canvas, never touches pixels -->
+  <div id="brush-cursor"></div>
+
+  <!-- Centered prompt shown before an image is loaded -->
+  <div id="hint">
+    Upload an image to begin.<br>
+    <span style="font-size:11px; opacity:0.6;">JPG or PNG &nbsp;·&nbsp; Max recommended: 4000 × 4000 px</span>
+  </div>
+
+  <!-- Patch canvas context creation so pixel-read-heavy brushes perform well.
+       Must run BEFORE p5 loads, since p5 calls getContext('2d') at startup. -->
+  <script>
+    (function () {
+      const _getContext = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = function (type, attrs) {
+        if (type === "2d") {
+          attrs = Object.assign({}, attrs, { willReadFrequently: true });
+        }
+        return _getContext.call(this, type, attrs);
+      };
+    })();
+  </script>
+
+  <!-- p5.js from CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.4/p5.min.js"></script>
+  <script src="sketch.js"></script>
+
+  <!-- Wire up the HTML toolbar to the sketch after p5 initialises -->
+  <script>
+    // Wait for p5 to have set up its globals
+    window.addEventListener("load", () => {
+      const hint       = document.getElementById("hint");
+      const brushSel   = document.getElementById("brush-select");
+      const fileInput  = document.getElementById("file-input");
+      const undoBtn    = document.getElementById("undo-btn");
+      const clearBtn   = document.getElementById("clear-btn");
+      const saveBtn          = document.getElementById("save-btn");
+      const brushCursor      = document.getElementById("brush-cursor");
+      const sizeSlider       = document.getElementById("size-slider");
+      const sizeValue        = document.getElementById("size-value");
+      const intensitySlider  = document.getElementById("intensity-slider");
+      const intensityValue   = document.getElementById("intensity-value");
+      const bgColorInput     = document.getElementById("bg-color");
+
+      // Brush radius (px) matched to each brush's effect area
+      const brushDiameters = {
+        "Pixel Shift":  100,  // ±50px scatter
+        "Data Noise":    80,  // r=40
+        "Signal Bloom":  20,  // r=10
+        "Spectral Swap":           30,  // r=15
+        "Chromatic Aberration":    40,  // r=20
+        "Scan Line":              120,  // rY=60 (vertical height)
+        "Bitcrush":                60,  // r=30
+        "Pixel Sort":              80,  // r=40
+      };
+
+      function updateCursorSize() {
+        const base = brushDiameters[currentBrush] || 40;
+        const multiplier = sizeSlider.value / 100;
+        const d = Math.round(base * multiplier);
+        brushCursor.style.width  = d + "px";
+        brushCursor.style.height = d + "px";
+      }
+
+      // Show/hide cursor only over the p5 canvas
+      document.addEventListener("mousemove", (e) => {
+        if (e.target && e.target.tagName === "CANVAS") {
+          brushCursor.style.display = "block";
+          brushCursor.style.left = e.clientX + "px";
+          brushCursor.style.top  = e.clientY + "px";
+        } else {
+          brushCursor.style.display = "none";
+        }
+      });
+
+      document.addEventListener("mouseleave", () => {
+        brushCursor.style.display = "none";
+      });
+
+      updateCursorSize();
+
+      sizeSlider.addEventListener("input", () => {
+        brushSizeMultiplier = sizeSlider.value / 100;
+        sizeValue.textContent = sizeSlider.value + "%";
+        updateCursorSize();
+      });
+
+      intensitySlider.addEventListener("input", () => {
+        brushIntensity = intensitySlider.value / 100;
+        intensityValue.textContent = intensitySlider.value + "%";
+      });
+
+      const shapeCircleBtn = document.getElementById("shape-circle");
+      const shapeSquareBtn = document.getElementById("shape-square");
+
+      function setShape(shape) {
+        brushShape = shape;
+        brushCursor.style.borderRadius = shape === "square" ? "3px" : "50%";
+        shapeCircleBtn.classList.toggle("active", shape === "circle");
+        shapeSquareBtn.classList.toggle("active", shape === "square");
+      }
+
+      shapeCircleBtn.addEventListener("click", () => setShape("circle"));
+      shapeSquareBtn.addEventListener("click", () => setShape("square"));
+
+      bgColorInput.addEventListener("input", () => {
+        bgColor = bgColorInput.value;
+        document.body.style.background = bgColorInput.value;
+        // Repaint only the letterbox area (outside the image)
+        if (typeof scaledImg !== "undefined" && scaledImg) {
+          background(bgColor);
+          image(scaledImg, imgX, imgY, imgW, imgH);
+        }
+      });
+
+      brushSel.addEventListener("change", () => {
+        currentBrush = brushSel.value;
+        updateCursorSize();
+      });
+
+      fileInput.addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (!file || !file.type.startsWith("image/")) return;
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          // Reuse the sketch's loadImage path via a p5 File-like object
+          const fakeFile = { type: "image", data: evt.target.result };
+          handleImageUpload(fakeFile);
+          hint.classList.add("hidden");
+        };
+        reader.readAsDataURL(file);
+        // Reset so the same file can be re-uploaded if needed
+        fileInput.value = "";
+      });
+
+      undoBtn.addEventListener("click", () => undoLast());
+      clearBtn.addEventListener("click", () => resetCanvas());
+      saveBtn.addEventListener("click", () => saveCanvas("GlitchArt", "png"));
+
+      const liveBtn         = document.getElementById("live-btn");
+      const liveSpeedSlider = document.getElementById("live-speed-slider");
+      const liveSpeedValue  = document.getElementById("live-speed-value");
+
+      liveBtn.addEventListener("click", () => {
+        liveMode = !liveMode;
+        liveBtn.textContent = liveMode ? "Live: ON" : "Live: OFF";
+        liveBtn.classList.toggle("active", liveMode);
+      });
+
+      liveSpeedSlider.addEventListener("input", () => {
+        // Slider 1 (slow) → interval 10 frames; slider 10 (fast) → interval 1 frame
+        liveInterval = 11 - liveSpeedSlider.value;
+        liveSpeedValue.textContent = liveSpeedSlider.value;
+      });
+    });
+  </script>
+</body>
+</html>
