@@ -1,4 +1,4 @@
-// Glitch Brush Toolkit - Integrated Brushes
+// Glitch Brush Toolkit - "Noise Palette"
 // Cam Mansanarez
 
 let userImg, scaledImg;
@@ -15,8 +15,6 @@ let brushSizeMultiplier = 1.0;
 let brushIntensity = 1.0;
 let brushShape = "circle";
 let bgColor = '#141414';
-let liveMode = false;
-let liveInterval = 3; // apply brush every N frames in live mode
 
 // UI elements
 let brushSelector, uploadButton, undoButton, clearButton, saveButton;
@@ -28,9 +26,8 @@ function setup() {
 }
 
 function draw() {
-  const shouldApply = userImg && (isDrawing || (liveMode && frameCount % liveInterval === 0));
-  if (shouldApply) {
-    switch (currentBrush) {
+  if (!userImg || !isDrawing) return;
+  switch (currentBrush) {
       case "Pixel Shift":
         applyPixelShift();
         break;
@@ -55,7 +52,6 @@ function draw() {
       case "Pixel Sort":
         applyPixelSort();
         break;
-    }
   }
 }
 
@@ -96,15 +92,6 @@ function keyPressed() {
   if (key === 'z' || key === 'Z') undoLast();
   // C: clear
   if (key === 'c' || key === 'C') resetCanvas();
-  // L: toggle live mode
-  if (key === 'l' || key === 'L') {
-    liveMode = !liveMode;
-    let btn = document.getElementById('live-btn');
-    if (btn) {
-      btn.textContent = liveMode ? 'Live: ON' : 'Live: OFF';
-      btn.classList.toggle('active', liveMode);
-    }
-  }
 }
 
 function windowResized() {

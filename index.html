@@ -306,17 +306,6 @@
 
     <div class="divider"></div>
 
-    <span class="label">Live Mode</span>
-    <button id="live-btn">Live: OFF</button>
-
-    <span class="label">Speed</span>
-    <div class="slider-row">
-      <input id="live-speed-slider" type="range" min="1" max="10" value="5" step="1" />
-      <span id="live-speed-value" class="slider-val">5</span>
-    </div>
-
-    <div class="divider"></div>
-
     <span class="label">Background</span>
     <input id="bg-color" type="color" value="#141414" />
 
@@ -329,7 +318,7 @@
     <div class="divider"></div>
 
     <span class="label" style="line-height:1.6;">
-      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear &nbsp;·&nbsp; L live
+      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear
     </span>
   </div>
 
@@ -473,21 +462,6 @@
       clearBtn.addEventListener("click", () => resetCanvas());
       saveBtn.addEventListener("click", () => saveCanvas("GlitchArt", "png"));
 
-      const liveBtn         = document.getElementById("live-btn");
-      const liveSpeedSlider = document.getElementById("live-speed-slider");
-      const liveSpeedValue  = document.getElementById("live-speed-value");
-
-      liveBtn.addEventListener("click", () => {
-        liveMode = !liveMode;
-        liveBtn.textContent = liveMode ? "Live: ON" : "Live: OFF";
-        liveBtn.classList.toggle("active", liveMode);
-      });
-
-      liveSpeedSlider.addEventListener("input", () => {
-        // Slider 1 (slow) → interval 10 frames; slider 10 (fast) → interval 1 frame
-        liveInterval = 11 - liveSpeedSlider.value;
-        liveSpeedValue.textContent = liveSpeedSlider.value;
-      });
     });
   </script>
 </body>
