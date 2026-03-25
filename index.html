@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Glitch Art Palette</title>
+  <title>Noise Palette</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
   <style>
     *, *::before, *::after {
       box-sizing: border-box;
@@ -548,6 +549,19 @@
     <span class="label" style="line-height:1.6;">
       1–8 brush &nbsp;·&nbsp; Z undo &nbsp;·&nbsp; R random<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; hold O compare
     </span>
+
+    <div class="divider"></div>
+    <a href="https://noirmak.com" target="_blank" rel="noopener noreferrer" style="
+      display:block;
+      color:rgba(255,255,255,0.2);
+      font-size:9px;
+      letter-spacing:0.12em;
+      text-transform:uppercase;
+      text-decoration:none;
+      text-align:center;
+      padding:4px 0 2px;
+      transition:color 0.15s;
+    " onmouseover="this.style.color='rgba(255,255,255,0.5)'" onmouseout="this.style.color='rgba(255,255,255,0.2)'">Noir Mak</a>
   </div>
 
   <!-- Brush size indicator — floats above canvas, never touches pixels -->
@@ -560,6 +574,8 @@
 
   <!-- Centered prompt shown before an image is loaded -->
   <div id="hint">
+    <img src="favicon.png" style="width:52px; height:52px; opacity:0.18; margin-bottom:14px; display:block; margin-left:auto; margin-right:auto;" /><br>
+    <span style="font-size:17px; opacity:0.55; letter-spacing:0.12em;">Noise Palette</span><br>
     Upload an image to begin.<br>
     <span style="font-size:11px; opacity:0.6;">JPG or PNG &nbsp;·&nbsp; Max recommended: 4000 × 4000 px</span>
   </div>
