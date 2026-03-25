@@ -28,6 +28,7 @@ let signalAmpMax      = 2.5;     // upper amp bound
 let signalMode        = "Bloom"; // "Bloom" | "Burn"
 let brushShape = "circle";
 let bgColor = '#141414';
+let symmetryMode = "Off";
 
 const bayer4 = [
   [ 0,  8,  2, 10],
@@ -48,16 +49,60 @@ function setup() {
 function draw() {
   if (!userImg || !isDrawing) return;
 
-  let preRegion, rx, ry, rw, rh;
+  const positions = getMirrorPositions(mouseX, mouseY, pmouseX, pmouseY);
+
+  // Capture pre-stroke snapshots for every paint position before any brush runs
+  let preRegions = null;
   if (brushOpacity < 1.0) {
     let pad = getBrushPad();
-    rx = max(0, mouseX - pad);
-    ry = max(0, mouseY - pad);
-    rw = min(width,  mouseX + pad) - rx;
-    rh = min(height, mouseY + pad) - ry;
-    preRegion = get(rx, ry, rw, rh);
+    preRegions = positions.map(([mx, my]) => {
+      let rx = max(0, mx - pad);
+      let ry = max(0, my - pad);
+      let rw = min(width,  mx + pad) - rx;
+      let rh = min(height, my + pad) - ry;
+      return { snap: get(rx, ry, rw, rh), rx, ry };
+    });
   }
 
+  // Paint at main position then each mirror position
+  const origMX = mouseX, origMY = mouseY;
+  const origPMX = pmouseX, origPMY = pmouseY;
+  for (let [mx, my, pmx, pmy] of positions) {
+    mouseX = mx; mouseY = my; pmouseX = pmx; pmouseY = pmy;
+    applyCurrentBrush();
+  }
+  mouseX = origMX; mouseY = origMY;
+  pmouseX = origPMX; pmouseY = origPMY;
+
+  // Apply opacity fade over every affected region
+  if (preRegions) {
+    let alpha = (1 - brushOpacity) * 255;
+    for (let { snap, rx, ry } of preRegions) {
+      tint(255, alpha);
+      image(snap, rx, ry);
+      noTint();
+    }
+  }
+}
+
+// Returns [mx, my, pmx, pmy] for the main position + all active mirror positions.
+// pmouseX/Y are mirrored too so direction-sensitive brushes (e.g. Chromatic Aberration,
+// Pixel Sort) compute the correct angle at each mirror.
+function getMirrorPositions(mx, my, pmx, pmy) {
+  const pos = [[mx, my, pmx, pmy]];
+  if (symmetryMode === "H" || symmetryMode === "Both") {
+    pos.push([width - mx, my, width - pmx, pmy]);
+  }
+  if (symmetryMode === "V" || symmetryMode === "Both") {
+    pos.push([mx, height - my, pmx, height - pmy]);
+  }
+  if (symmetryMode === "Both") {
+    pos.push([width - mx, height - my, width - pmx, height - pmy]);
+  }
+  return pos;
+}
+
+function applyCurrentBrush() {
   switch (currentBrush) {
     case "Pixel Shift":          applyPixelShift();          break;
     case "Data Noise":           applyDataNoise();           break;
@@ -67,12 +112,6 @@ function draw() {
     case "Scan Line":            applyScanLine();            break;
     case "Bitcrush":             applyBitcrush();            break;
     case "Pixel Sort":           applyPixelSort();           break;
-  }
-
-  if (preRegion) {
-    tint(255, (1 - brushOpacity) * 255);
-    image(preRegion, rx, ry);
-    noTint();
   }
 }
 
