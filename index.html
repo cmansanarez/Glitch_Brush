@@ -328,6 +328,68 @@
       display: none;
       transition: width 0.12s ease, height 0.12s ease;
     }
+
+    /* ── Mirror cursors for symmetry ── */
+    .cursor-mirror {
+      position: fixed;
+      pointer-events: none;
+      border: 1px dashed rgba(255, 255, 255, 0.3);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+      transform: translate(-50%, -50%);
+      z-index: 48;
+      display: none;
+      transition: width 0.12s ease, height 0.12s ease;
+    }
+
+    /* ── History filmstrip ── */
+    #history-strip {
+      position: fixed;
+      left: 185px;
+      display: none;
+      flex-direction: row;
+      gap: 3px;
+      padding: 6px 8px;
+      background: rgba(6, 6, 6, 0.94);
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+      border-left: none;
+      border-top-width: 3px;
+      border-bottom-width: 3px;
+      border-radius: 0 8px 8px 0;
+      align-items: center;
+      z-index: 200;
+      pointer-events: auto;
+    }
+
+    #history-strip.visible {
+      display: flex;
+    }
+
+    .history-thumb {
+      width: 72px;
+      height: 48px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      cursor: pointer;
+      object-fit: cover;
+      opacity: 0.72;
+      transition: opacity 0.12s, border-color 0.12s, transform 0.1s;
+      display: block;
+      flex-shrink: 0;
+    }
+
+    .history-thumb:hover {
+      opacity: 1;
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: scale(1.06);
+    }
+
+    .history-thumb.newest {
+      border-color: rgba(255, 255, 255, 0.22);
+      opacity: 0.85;
+    }
+
   </style>
 </head>
 <body>
@@ -346,6 +408,7 @@
       <option value="Pixel Sort">Pixel Sort (8)</option>
     </select>
     <p id="brush-hint" class="brush-hint"></p>
+    <button id="randomize-btn">Randomize</button>
 
     <div class="divider"></div>
 
@@ -376,6 +439,14 @@
     <div id="shape-group" class="btn-group">
       <button id="shape-circle" class="active">Circle</button>
       <button id="shape-square">Square</button>
+    </div>
+
+    <span class="label">Symmetry</span>
+    <div class="btn-group">
+      <button id="sym-off" class="active">Off</button>
+      <button id="sym-h">H</button>
+      <button id="sym-v">V</button>
+      <button id="sym-both">X</button>
     </div>
 
     <div id="ctx-divider" class="divider ctx-hidden"></div>
@@ -475,13 +546,17 @@
     <div class="divider"></div>
 
     <span class="label" style="line-height:1.6;">
-      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; hold O compare
+      1–8 brush &nbsp;·&nbsp; Z undo &nbsp;·&nbsp; R random<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; hold O compare
     </span>
   </div>
 
   <!-- Brush size indicator — floats above canvas, never touches pixels -->
   <div id="brush-cursor"></div>
   <div id="sample-crosshair"></div>
+  <div id="cursor-mirror-1" class="cursor-mirror"></div>
+  <div id="cursor-mirror-2" class="cursor-mirror"></div>
+  <div id="cursor-mirror-3" class="cursor-mirror"></div>
+  <div id="history-strip"></div>
 
   <!-- Centered prompt shown before an image is loaded -->
   <div id="hint">
@@ -555,12 +630,42 @@
 
       // Show/hide cursor only over the p5 canvas
       const sampleCrosshair = document.getElementById("sample-crosshair");
+      const mirrorCursors   = [
+        document.getElementById("cursor-mirror-1"),
+        document.getElementById("cursor-mirror-2"),
+        document.getElementById("cursor-mirror-3")
+      ];
+
+      function updateMirrorCursors(cx, cy) {
+        mirrorCursors.forEach(m => m.style.display = "none");
+        if (symmetryMode === "Off") return;
+        const cw = brushCursor.style.width;
+        const ch = brushCursor.style.height;
+        const br = brushCursor.style.borderRadius;
+        function showMirror(el, x, y) {
+          el.style.width = cw;  el.style.height = ch;  el.style.borderRadius = br;
+          el.style.left  = x + "px";  el.style.top = y + "px";
+          el.style.display = "block";
+        }
+        const mx = window.innerWidth  - cx;
+        const my = window.innerHeight - cy;
+        if (symmetryMode === "H") {
+          showMirror(mirrorCursors[0], mx, cy);
+        } else if (symmetryMode === "V") {
+          showMirror(mirrorCursors[0], cx, my);
+        } else if (symmetryMode === "Both") {
+          showMirror(mirrorCursors[0], mx, cy);
+          showMirror(mirrorCursors[1], cx, my);
+          showMirror(mirrorCursors[2], mx, my);
+        }
+      }
 
       document.addEventListener("mousemove", (e) => {
         if (e.target && e.target.tagName === "CANVAS") {
           brushCursor.style.display = "block";
           brushCursor.style.left = e.clientX + "px";
           brushCursor.style.top  = e.clientY + "px";
+          updateMirrorCursors(e.clientX, e.clientY);
           if (currentBrush === "Pixel Shift") {
             sampleCrosshair.style.display = "block";
             sampleCrosshair.style.left = e.clientX + "px";
@@ -571,12 +676,14 @@
         } else {
           brushCursor.style.display = "none";
           sampleCrosshair.style.display = "none";
+          mirrorCursors.forEach(m => m.style.display = "none");
         }
       });
 
       document.addEventListener("mouseleave", () => {
         brushCursor.style.display = "none";
         sampleCrosshair.style.display = "none";
+        mirrorCursors.forEach(m => m.style.display = "none");
       });
 
       updateCursorSize();
@@ -809,6 +916,81 @@
       }
       bloomModeBloom.addEventListener("click", () => setBloomMode("Bloom"));
       bloomModeBurn.addEventListener("click",  () => setBloomMode("Burn"));
+      // ── Symmetry mode ────────────────────────────────────────────────────────
+      const symOff  = document.getElementById("sym-off");
+      const symH    = document.getElementById("sym-h");
+      const symV    = document.getElementById("sym-v");
+      const symBoth = document.getElementById("sym-both");
+
+      function setSymmetryMode(mode) {
+        symmetryMode = mode;
+        symOff.classList.toggle("active",  mode === "Off");
+        symH.classList.toggle("active",    mode === "H");
+        symV.classList.toggle("active",    mode === "V");
+        symBoth.classList.toggle("active", mode === "Both");
+        mirrorCursors.forEach(m => m.style.display = "none");
+      }
+      symOff.addEventListener("click",  () => setSymmetryMode("Off"));
+      symH.addEventListener("click",    () => setSymmetryMode("H"));
+      symV.addEventListener("click",    () => setSymmetryMode("V"));
+      symBoth.addEventListener("click", () => setSymmetryMode("Both"));
+
+      // ── History filmstrip ─────────────────────────────────────────────────────
+      const historyStrip = document.getElementById("history-strip");
+      let hideStripTimeout;
+
+      window.updateHistoryStrip = function() {
+        historyStrip.innerHTML = "";
+        if (!history || history.length === 0) return;
+        history.forEach((entry, idx) => {
+          let img = document.createElement("img");
+          img.className = "history-thumb" + (idx === history.length - 1 ? " newest" : "");
+          img.src   = entry.thumb;
+          img.title = "Step " + (idx + 1) + " of " + history.length + " — click to restore";
+          img.addEventListener("click", () => {
+            image(entry.snapshot, 0, 0);
+            history.splice(idx + 1);
+            window.updateHistoryStrip();
+            historyStrip.classList.remove("visible");
+          });
+          historyStrip.appendChild(img);
+        });
+      };
+
+      undoBtn.addEventListener("mouseenter", () => {
+        if (!history || history.length === 0) return;
+        clearTimeout(hideStripTimeout);
+        window.updateHistoryStrip();
+        const rect = undoBtn.getBoundingClientRect();
+        historyStrip.style.top = Math.round(rect.top) + "px";
+        historyStrip.classList.add("visible");
+      });
+      undoBtn.addEventListener("mouseleave", () => {
+        hideStripTimeout = setTimeout(() => historyStrip.classList.remove("visible"), 180);
+      });
+      historyStrip.addEventListener("mouseenter", () => clearTimeout(hideStripTimeout));
+      historyStrip.addEventListener("mouseleave", () => {
+        hideStripTimeout = setTimeout(() => historyStrip.classList.remove("visible"), 180);
+      });
+
+      // ── Randomize brush ───────────────────────────────────────────────────────
+      window.syncRandomizedBrush = function() {
+        brushSel.value = currentBrush;
+        sizeSlider.value = Math.round(brushSizeMultiplier * 100);
+        sizeValue.textContent = sizeSlider.value + "%";
+        intensitySlider.value = Math.round(brushIntensity * 100);
+        intensityValue.textContent = intensitySlider.value + "%";
+        opacitySlider.value = Math.round(brushOpacity * 100);
+        opacityValue.textContent = opacitySlider.value + "%";
+        shapeCircleBtn.classList.toggle("active", brushShape === "circle");
+        shapeSquareBtn.classList.toggle("active", brushShape === "square");
+        updateCursorSize();
+        switchContextPanel(currentBrush);
+        updateBrushHint(currentBrush);
+        if (currentBrush !== "Pixel Shift") sampleCrosshair.style.display = "none";
+      };
+
+      document.getElementById("randomize-btn").addEventListener("click", () => randomizeBrush());
     });
   </script>
 </body>
