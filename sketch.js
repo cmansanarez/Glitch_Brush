@@ -14,8 +14,26 @@ let isDrawing = false;
 let brushSizeMultiplier = 1.0;
 let brushIntensity = 1.0;
 let brushOpacity = 1.0;
+let pixelSortDir      = "Auto";  // "Auto" | "H" | "V"
+let caMinOffset       = 0;       // 0–20 px base fringe
+let spectralHueTarget = 180;     // 0–360 target hue
+let bitDepthVal       = 3;       // 1–6 bit depth
+let bitBlockSize      = 4;       // 1–8 block size
+let bitDither         = false;
+let dataNoiseDir      = "Both";  // "H" | "V" | "Both"
+let scanLineDir       = "H";     // "H" | "V"
+let signalAmpMin      = 1.0;     // lower amp bound
+let signalAmpMax      = 2.5;     // upper amp bound
+let signalMode        = "Bloom"; // "Bloom" | "Burn"
 let brushShape = "circle";
 let bgColor = '#141414';
+
+const bayer4 = [
+  [ 0,  8,  2, 10],
+  [12,  4, 14,  6],
+  [ 3, 11,  1,  9],
+  [15,  7, 13,  5]
+];
 
 // UI elements
 let brushSelector, uploadButton, undoButton, clearButton, saveButton;
@@ -122,30 +140,33 @@ function applyPixelShift() {
 
   if (random(1) < 0.2 * brushIntensity) {
     let brushSize = int(random(1, 20));
+    let scatter   = 50 * brushSizeMultiplier;
+    let glitchX   = mouseX + random(-scatter, scatter);
+    let glitchY   = mouseY + random(-scatter, scatter);
 
-    let choice = int(random(3));
-    let brushColor = choice === 0 ? color(255, 0, 0) :
-                     choice === 1 ? color(0, 255, 0) :
-                                    color(0, 0, 255);
+    // Sample colors from source image at brush and scatter positions
+    let mx = constrain(int(mouseX - imgX), 0, imgW - 1);
+    let my = constrain(int(mouseY - imgY), 0, imgH - 1);
+    let mc = scaledImg.get(mx, my);
 
-    let scatter = 50 * brushSizeMultiplier;
-    let glitchX = mouseX + random(-scatter, scatter);
-    let glitchY = mouseY + random(-scatter, scatter);
+    let sx = constrain(int(glitchX - imgX), 0, imgW - 1);
+    let sy = constrain(int(glitchY - imgY), 0, imgH - 1);
+    let sc = scaledImg.get(sx, sy);
 
     if (random(1) < 0.1) {
       erasePixel(glitchX, glitchY, brushSize);
     } else {
-      fill(brushColor);
+      fill(sc);
       square(glitchX, glitchY, brushSize);
     }
 
-    fill(255, 0, 0);
+    fill(red(mc), 0, 0);
     square(mouseX + random(-5, 5), mouseY, brushSize);
 
-    fill(0, 255, 0);
+    fill(0, green(mc), 0);
     square(mouseX, mouseY + random(-5, 5), brushSize);
 
-    fill(0, 0, 255);
+    fill(0, 0, blue(mc));
     square(mouseX, mouseY, brushSize);
   }
 }
@@ -172,8 +193,8 @@ function applyDataNoise() {
       let py = int(mouseY + y);
       if (px >= 0 && px < width && py >= 0 && py < height) {
         let n = noise(px * 0.01, py * 0.01, frameCount * 0.02);
-        let offsetX = int(map(n, 0, 1, -30 * brushIntensity, 30 * brushIntensity));
-        let offsetY = int(map(n, 0, 1, -3 * brushIntensity, 3 * brushIntensity));
+        let offsetX = dataNoiseDir !== "V" ? int(map(n, 0, 1, -30 * brushIntensity, 30 * brushIntensity)) : 0;
+        let offsetY = dataNoiseDir !== "H" ? int(map(n, 0, 1, -3  * brushIntensity,  3 * brushIntensity)) : 0;
         let sx = constrain(px + offsetX, 0, width - 1);
         let sy = constrain(py + offsetY, 0, height - 1);
         let c = scaledImg.get(sx - imgX, sy - imgY);
@@ -186,34 +207,22 @@ function applyDataNoise() {
 
 // 3. Signal Bloom Brush
 function applySignalBloom() {
-  noStroke();
   loadPixels();
 
-  let r = int(10 * brushSizeMultiplier);
-  let amp = lerp(1.0, random(0.15, 2.5), brushIntensity);
+  let r   = int(10 * brushSizeMultiplier);
+  let raw = lerp(signalAmpMin, signalAmpMax, brushIntensity * random(0.5, 1.0));
+  let amp = signalMode === "Burn" ? 1.0 / raw : raw;
 
   for (let x = -r; x < r; x++) {
     for (let y = -r; y < r; y++) {
       if (!inBrushShape(x, y, r)) continue;
       let px = int(mouseX + x);
       let py = int(mouseY + y);
-
       if (px >= 0 && px < width && py >= 0 && py < height) {
         let index = (py * width + px) * 4;
-
-        let rVal = pixels[index + 0] * amp;
-        let gVal = pixels[index + 1] * amp;
-        let bVal = pixels[index + 2] * amp;
-
-        if (random(1) < 0.03) {
-          rVal = 255;
-          gVal = 255;
-          bVal = random(200, 255);
-        }
-
-        pixels[index + 0] = constrain(rVal, 0, 255);
-        pixels[index + 1] = constrain(gVal, 0, 255);
-        pixels[index + 2] = constrain(bVal, 0, 255);
+        pixels[index + 0] = constrain(pixels[index + 0] * amp, 0, 255);
+        pixels[index + 1] = constrain(pixels[index + 1] * amp, 0, 255);
+        pixels[index + 2] = constrain(pixels[index + 2] * amp, 0, 255);
       }
     }
   }
@@ -225,7 +234,6 @@ function applySignalBloom() {
 function applySpectralSwap() {
   loadPixels();
   let r = int(15 * brushSizeMultiplier);
-  let hueShift = (frameCount * 0.8 * brushIntensity) % 360;
   for (let x = -r; x < r; x++) {
     for (let y = -r; y < r; y++) {
       if (!inBrushShape(x, y, r)) continue;
@@ -243,9 +251,12 @@ function applySpectralSwap() {
           bVal = temp;
         }
         let hsb = rgbToHsb(rVal, gVal, bVal);
-        hsb[0] = (hsb[0] + hueShift) % 360;
+        // Pull hue toward target via shortest angular path
+        let diff = spectralHueTarget - hsb[0];
+        if (diff >  180) diff -= 360;
+        if (diff < -180) diff += 360;
+        hsb[0] = (hsb[0] + diff * brushIntensity + 360) % 360;
         hsb[1] = constrain(hsb[1] * random(0.9, 1.2), 0, 100);
-        if (random(1) < 0.03) hsb[1] *= 0.3;
         let rgb = hsbToRgb(hsb[0], hsb[1], hsb[2]);
         pixels[index + 0] = rgb[0];
         pixels[index + 1] = rgb[1];
@@ -266,7 +277,8 @@ function applyChromaticAberration() {
 
   let r = int(20 * brushSizeMultiplier);
   let speed = dist(mouseX, mouseY, pmouseX, pmouseY);
-  let maxOffset = int(map(speed, 0, 40, 2, 14, true) * brushIntensity);
+  let speedBonus = map(speed, 0, 40, 0, 14, true);
+  let maxOffset  = int((caMinOffset + speedBonus) * brushIntensity);
 
   // Offset channels along the axis of mouse movement.
   // Red trails behind, blue leads ahead — matches real lens fringe direction.
@@ -309,36 +321,63 @@ function applyChromaticAberration() {
 // 6. Scan Line Brush
 function applyScanLine() {
   loadPixels();
-  // Source buffer prevents shifted rows from reading already-shifted neighbours
   let src = new Uint8ClampedArray(pixels);
 
-  let rY = int(60 * brushSizeMultiplier); // vertical half-height
-  let rX = int(80 * brushSizeMultiplier); // horizontal half-width (wider for TV-band feel)
-
-  for (let y = -rY; y < rY; y++) {
-    let py = int(mouseY + y);
-    if (py < 0 || py >= height) continue;
-
-    // Noise keyed on row y gives each row a spatially consistent shift
-    let n = noise(py * 0.04, frameCount * 0.01);
-    let maxShift = 60 * brushIntensity;
-    let shift = int(map(n, 0, 1, -maxShift, maxShift));
-
-    // Fade shift out toward top/bottom edges of brush
-    let vFalloff = map(abs(y), 0, rY, 1, 0);
-    shift = int(shift * vFalloff);
+  if (scanLineDir === "V") {
+    // Column mode — shifts pixels up/down within each column
+    let rX = int(60 * brushSizeMultiplier);
+    let rY = int(80 * brushSizeMultiplier);
 
     for (let x = -rX; x < rX; x++) {
       let px = int(mouseX + x);
       if (px < 0 || px >= width) continue;
 
-      let sx      = constrain(px + shift, 0, width - 1);
-      let dest    = (py * width + px) * 4;
-      let srcIdx  = (py * width + sx) * 4;
+      let n        = noise(px * 0.04, frameCount * 0.01);
+      let maxShift = 60 * brushIntensity;
+      let shift    = int(map(n, 0, 1, -maxShift, maxShift));
+      let hFalloff = map(abs(x), 0, rX, 1, 0);
+      shift = int(shift * hFalloff);
 
-      pixels[dest + 0] = src[srcIdx + 0];
-      pixels[dest + 1] = src[srcIdx + 1];
-      pixels[dest + 2] = src[srcIdx + 2];
+      for (let y = -rY; y < rY; y++) {
+        let py = int(mouseY + y);
+        if (py < 0 || py >= height) continue;
+
+        let sy     = constrain(py + shift, 0, height - 1);
+        let dest   = (py * width + px) * 4;
+        let srcIdx = (sy * width + px) * 4;
+
+        pixels[dest]     = src[srcIdx];
+        pixels[dest + 1] = src[srcIdx + 1];
+        pixels[dest + 2] = src[srcIdx + 2];
+      }
+    }
+  } else {
+    // Row mode — shifts pixels left/right within each row
+    let rY = int(60 * brushSizeMultiplier);
+    let rX = int(80 * brushSizeMultiplier);
+
+    for (let y = -rY; y < rY; y++) {
+      let py = int(mouseY + y);
+      if (py < 0 || py >= height) continue;
+
+      let n        = noise(py * 0.04, frameCount * 0.01);
+      let maxShift = 60 * brushIntensity;
+      let shift    = int(map(n, 0, 1, -maxShift, maxShift));
+      let vFalloff = map(abs(y), 0, rY, 1, 0);
+      shift = int(shift * vFalloff);
+
+      for (let x = -rX; x < rX; x++) {
+        let px = int(mouseX + x);
+        if (px < 0 || px >= width) continue;
+
+        let sx     = constrain(px + shift, 0, width - 1);
+        let dest   = (py * width + px) * 4;
+        let srcIdx = (py * width + sx) * 4;
+
+        pixels[dest]     = src[srcIdx];
+        pixels[dest + 1] = src[srcIdx + 1];
+        pixels[dest + 2] = src[srcIdx + 2];
+      }
     }
   }
 
@@ -349,37 +388,45 @@ function applyScanLine() {
 function applyBitcrush() {
   loadPixels();
 
-  let r = int(30 * brushSizeMultiplier);
+  let r    = int(30 * brushSizeMultiplier);
+  let step = 256 / pow(2, bitDepthVal);
 
-  // High intensity → fewer bits (down to 1-bit binary) + larger blocks
-  // Low intensity  → 6-bit (subtle quantization), block = 1px (per-pixel)
-  let bitDepth  = round(map(brushIntensity, 0, 1, 6, 1));
-  let step      = 256 / pow(2, bitDepth);
-  let blockSize = max(1, round(map(brushIntensity, 0, 1, 1, 8)));
-
-  for (let x = -r; x <= r; x += blockSize) {
-    for (let y = -r; y <= r; y += blockSize) {
-      if (!inBrushShape(x, y, r)) continue;
-
-      let px = int(mouseX + x);
-      let py = int(mouseY + y);
-      if (px < 0 || px >= width || py < 0 || py >= height) continue;
-
-      // Quantize the top-left pixel of the block as the representative value
-      let repIdx = (py * width + px) * 4;
-      let qR = floor(pixels[repIdx + 0] / step) * step;
-      let qG = floor(pixels[repIdx + 1] / step) * step;
-      let qB = floor(pixels[repIdx + 2] / step) * step;
-
-      // Flood the entire block with the quantized color
-      for (let bx = 0; bx < blockSize; bx++) {
-        for (let by = 0; by < blockSize; by++) {
-          let fpx = constrain(px + bx, 0, width - 1);
-          let fpy = constrain(py + by, 0, height - 1);
-          let fi  = (fpy * width + fpx) * 4;
-          pixels[fi + 0] = qR;
-          pixels[fi + 1] = qG;
-          pixels[fi + 2] = qB;
+  if (bitDither) {
+    // Ordered dither — per-pixel Bayer quantization
+    for (let x = -r; x <= r; x++) {
+      for (let y = -r; y <= r; y++) {
+        if (!inBrushShape(x, y, r)) continue;
+        let px = int(mouseX + x);
+        let py = int(mouseY + y);
+        if (px < 0 || px >= width || py < 0 || py >= height) continue;
+        let idx       = (py * width + px) * 4;
+        let threshold = (bayer4[py % 4][px % 4] / 16 - 0.5) * step;
+        pixels[idx]     = constrain(floor((pixels[idx]     + threshold) / step) * step, 0, 255);
+        pixels[idx + 1] = constrain(floor((pixels[idx + 1] + threshold) / step) * step, 0, 255);
+        pixels[idx + 2] = constrain(floor((pixels[idx + 2] + threshold) / step) * step, 0, 255);
+      }
+    }
+  } else {
+    // Block quantization — flood each NxN block with one quantized color
+    for (let x = -r; x <= r; x += bitBlockSize) {
+      for (let y = -r; y <= r; y += bitBlockSize) {
+        if (!inBrushShape(x, y, r)) continue;
+        let px = int(mouseX + x);
+        let py = int(mouseY + y);
+        if (px < 0 || px >= width || py < 0 || py >= height) continue;
+        let repIdx = (py * width + px) * 4;
+        let qR = floor(pixels[repIdx]     / step) * step;
+        let qG = floor(pixels[repIdx + 1] / step) * step;
+        let qB = floor(pixels[repIdx + 2] / step) * step;
+        for (let bx = 0; bx < bitBlockSize; bx++) {
+          for (let by = 0; by < bitBlockSize; by++) {
+            let fpx = constrain(px + bx, 0, width - 1);
+            let fpy = constrain(py + by, 0, height - 1);
+            let fi  = (fpy * width + fpx) * 4;
+            pixels[fi]     = qR;
+            pixels[fi + 1] = qG;
+            pixels[fi + 2] = qB;
+          }
         }
       }
     }
@@ -396,7 +443,14 @@ function applyPixelSort() {
   let speed = dist(mouseX, mouseY, pmouseX, pmouseY);
   // When nearly stationary default to column sort; otherwise follow movement axis
   let angle = atan2(mouseY - pmouseY, mouseX - pmouseX);
-  let sortVertical = speed < 0.5 ? true : abs(sin(angle)) >= abs(cos(angle));
+  let sortVertical;
+  if (pixelSortDir === "H") {
+    sortVertical = false;
+  } else if (pixelSortDir === "V") {
+    sortVertical = true;
+  } else {
+    sortVertical = speed < 0.5 ? true : abs(sin(angle)) >= abs(cos(angle));
+  }
 
   if (sortVertical) {
     // Column sort — vertical movement: dark pixels sink, bright rise (or reverse)

@@ -185,13 +185,13 @@
       user-select: none;
     }
 
-    /* Shape toggle */
-    #shape-group {
+    /* Button group (shape toggle, direction toggles) */
+    .btn-group {
       display: flex;
       gap: 6px;
     }
 
-    #shape-group button {
+    .btn-group button {
       flex: 1;
       font-size: 11px;
       height: 28px;
@@ -203,6 +203,27 @@
     #toolbar button.active {
       background: rgba(255, 255, 255, 0.18);
       border-color: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Contextual brush options panel */
+    .ctx-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ctx-panel.hidden,
+    .ctx-hidden {
+      display: none;
+    }
+
+    /* Spectral hue color swatch */
+    #spectral-hue-preview {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      flex-shrink: 0;
     }
 
     /* Background color picker */
@@ -305,9 +326,92 @@
     </div>
 
     <span class="label">Shape</span>
-    <div id="shape-group">
+    <div id="shape-group" class="btn-group">
       <button id="shape-circle" class="active">Circle</button>
       <button id="shape-square">Square</button>
+    </div>
+
+    <div id="ctx-divider" class="divider ctx-hidden"></div>
+    <span id="ctx-label" class="label ctx-hidden">Options</span>
+
+    <!-- Pixel Sort options -->
+    <div id="ctx-pixel-sort" class="ctx-panel hidden">
+      <span class="label">Sort Direction</span>
+      <div class="btn-group">
+        <button id="sort-auto" class="active">Auto</button>
+        <button id="sort-h">H</button>
+        <button id="sort-v">V</button>
+      </div>
+    </div>
+
+    <!-- Chromatic Aberration options -->
+    <div id="ctx-chromatic" class="ctx-panel hidden">
+      <span class="label">Min Offset</span>
+      <div class="slider-row">
+        <input id="ca-min-slider" type="range" min="0" max="20" value="0" step="1" />
+        <span id="ca-min-value" class="slider-val">0px</span>
+      </div>
+    </div>
+
+    <!-- Spectral Swap options -->
+    <div id="ctx-spectral" class="ctx-panel hidden">
+      <span class="label">Hue Target</span>
+      <div class="slider-row">
+        <input id="spectral-hue-slider" type="range" min="0" max="360" value="180" step="1" />
+        <span id="spectral-hue-preview"></span>
+      </div>
+    </div>
+
+    <!-- Bitcrush options -->
+    <div id="ctx-bitcrush" class="ctx-panel hidden">
+      <span class="label">Bit Depth</span>
+      <div class="slider-row">
+        <input id="bit-depth-slider" type="range" min="1" max="6" value="3" step="1" />
+        <span id="bit-depth-value" class="slider-val">3</span>
+      </div>
+      <span class="label">Block Size</span>
+      <div class="slider-row">
+        <input id="bit-block-slider" type="range" min="1" max="8" value="4" step="1" />
+        <span id="bit-block-value" class="slider-val">4px</span>
+      </div>
+      <button id="bit-dither-btn">Dither: OFF</button>
+    </div>
+
+    <!-- Data Noise options -->
+    <div id="ctx-data-noise" class="ctx-panel hidden">
+      <span class="label">Direction</span>
+      <div class="btn-group">
+        <button id="dn-h">H</button>
+        <button id="dn-v">V</button>
+        <button id="dn-both" class="active">Both</button>
+      </div>
+    </div>
+
+    <!-- Scan Line options -->
+    <div id="ctx-scan-line" class="ctx-panel hidden">
+      <span class="label">Direction</span>
+      <div class="btn-group">
+        <button id="sl-h" class="active">H</button>
+        <button id="sl-v">V</button>
+      </div>
+    </div>
+
+    <!-- Signal Bloom options -->
+    <div id="ctx-signal-bloom" class="ctx-panel hidden">
+      <span class="label">Amp Min</span>
+      <div class="slider-row">
+        <input id="bloom-amp-min-slider" type="range" min="10" max="20" value="10" step="1" />
+        <span id="bloom-amp-min-value" class="slider-val">1.0×</span>
+      </div>
+      <span class="label">Amp Max</span>
+      <div class="slider-row">
+        <input id="bloom-amp-max-slider" type="range" min="10" max="40" value="25" step="1" />
+        <span id="bloom-amp-max-value" class="slider-val">2.5×</span>
+      </div>
+      <div class="btn-group">
+        <button id="bloom-mode-bloom" class="active">Bloom</button>
+        <button id="bloom-mode-burn">Burn</button>
+      </div>
     </div>
 
     <div class="divider"></div>
@@ -454,6 +558,7 @@
       brushSel.addEventListener("change", () => {
         currentBrush = brushSel.value;
         updateCursorSize();
+        switchContextPanel(brushSel.value);
       });
 
       fileInput.addEventListener("change", (e) => {
@@ -476,6 +581,144 @@
       clearBtn.addEventListener("click", () => resetCanvas());
       saveBtn.addEventListener("click", () => saveCanvas("GlitchArt", "png"));
 
+      // ── Contextual brush options ──────────────────────────────────────
+
+      const ctxPanelMap = {
+        "Pixel Shift":          null,
+        "Data Noise":           "ctx-data-noise",
+        "Signal Bloom":         "ctx-signal-bloom",
+        "Spectral Swap":        "ctx-spectral",
+        "Chromatic Aberration": "ctx-chromatic",
+        "Scan Line":            "ctx-scan-line",
+        "Bitcrush":             "ctx-bitcrush",
+        "Pixel Sort":           "ctx-pixel-sort"
+      };
+
+      function switchContextPanel(brushName) {
+        document.querySelectorAll(".ctx-panel").forEach(p => p.classList.add("hidden"));
+        const ctxDivider = document.getElementById("ctx-divider");
+        const ctxLabel   = document.getElementById("ctx-label");
+        const panelId    = ctxPanelMap[brushName];
+        if (panelId) {
+          document.getElementById(panelId).classList.remove("hidden");
+          ctxDivider.classList.remove("ctx-hidden");
+          ctxLabel.classList.remove("ctx-hidden");
+        } else {
+          ctxDivider.classList.add("ctx-hidden");
+          ctxLabel.classList.add("ctx-hidden");
+        }
+      }
+
+      switchContextPanel(currentBrush); // initialize on load
+
+      // Pixel Sort direction
+      const sortAuto = document.getElementById("sort-auto");
+      const sortH    = document.getElementById("sort-h");
+      const sortV    = document.getElementById("sort-v");
+
+      function setSortDir(dir) {
+        pixelSortDir = dir;
+        sortAuto.classList.toggle("active", dir === "Auto");
+        sortH.classList.toggle("active",    dir === "H");
+        sortV.classList.toggle("active",    dir === "V");
+      }
+      sortAuto.addEventListener("click", () => setSortDir("Auto"));
+      sortH.addEventListener("click",    () => setSortDir("H"));
+      sortV.addEventListener("click",    () => setSortDir("V"));
+
+      // Chromatic Aberration min offset
+      const caMinSlider = document.getElementById("ca-min-slider");
+      const caMinValue  = document.getElementById("ca-min-value");
+      caMinSlider.addEventListener("input", () => {
+        caMinOffset = parseInt(caMinSlider.value);
+        caMinValue.textContent = caMinSlider.value + "px";
+      });
+
+      // Spectral Swap hue target
+      const spectralHueSlider  = document.getElementById("spectral-hue-slider");
+      const spectralHuePreview = document.getElementById("spectral-hue-preview");
+
+      function updateSpectralPreview(h) {
+        spectralHuePreview.style.background = `hsl(${h}, 100%, 50%)`;
+      }
+      spectralHueSlider.addEventListener("input", () => {
+        spectralHueTarget = parseInt(spectralHueSlider.value);
+        updateSpectralPreview(spectralHueTarget);
+      });
+      updateSpectralPreview(180);
+
+      // Bitcrush controls
+      const bitDepthSlider = document.getElementById("bit-depth-slider");
+      const bitDepthValue  = document.getElementById("bit-depth-value");
+      const bitBlockSlider = document.getElementById("bit-block-slider");
+      const bitBlockValue  = document.getElementById("bit-block-value");
+      const bitDitherBtn   = document.getElementById("bit-dither-btn");
+
+      bitDepthSlider.addEventListener("input", () => {
+        bitDepthVal = parseInt(bitDepthSlider.value);
+        bitDepthValue.textContent = bitDepthSlider.value;
+      });
+      bitBlockSlider.addEventListener("input", () => {
+        bitBlockSize = parseInt(bitBlockSlider.value);
+        bitBlockValue.textContent = bitBlockSlider.value + "px";
+      });
+      bitDitherBtn.addEventListener("click", () => {
+        bitDither = !bitDither;
+        bitDitherBtn.textContent = bitDither ? "Dither: ON" : "Dither: OFF";
+        bitDitherBtn.classList.toggle("active", bitDither);
+      });
+
+      // Data Noise direction
+      const dnH    = document.getElementById("dn-h");
+      const dnV    = document.getElementById("dn-v");
+      const dnBoth = document.getElementById("dn-both");
+
+      function setDataNoiseDir(dir) {
+        dataNoiseDir = dir;
+        dnH.classList.toggle("active",    dir === "H");
+        dnV.classList.toggle("active",    dir === "V");
+        dnBoth.classList.toggle("active", dir === "Both");
+      }
+      dnH.addEventListener("click",    () => setDataNoiseDir("H"));
+      dnV.addEventListener("click",    () => setDataNoiseDir("V"));
+      dnBoth.addEventListener("click", () => setDataNoiseDir("Both"));
+
+      // Scan Line direction
+      const slH = document.getElementById("sl-h");
+      const slV = document.getElementById("sl-v");
+
+      function setScanLineDir(dir) {
+        scanLineDir = dir;
+        slH.classList.toggle("active", dir === "H");
+        slV.classList.toggle("active", dir === "V");
+      }
+      slH.addEventListener("click", () => setScanLineDir("H"));
+      slV.addEventListener("click", () => setScanLineDir("V"));
+
+      // Signal Bloom controls
+      const bloomAmpMinSlider = document.getElementById("bloom-amp-min-slider");
+      const bloomAmpMinValue  = document.getElementById("bloom-amp-min-value");
+      const bloomAmpMaxSlider = document.getElementById("bloom-amp-max-slider");
+      const bloomAmpMaxValue  = document.getElementById("bloom-amp-max-value");
+      const bloomModeBloom    = document.getElementById("bloom-mode-bloom");
+      const bloomModeBurn     = document.getElementById("bloom-mode-burn");
+
+      bloomAmpMinSlider.addEventListener("input", () => {
+        signalAmpMin = parseInt(bloomAmpMinSlider.value) / 10;
+        bloomAmpMinValue.textContent = signalAmpMin.toFixed(1) + "×";
+      });
+      bloomAmpMaxSlider.addEventListener("input", () => {
+        signalAmpMax = parseInt(bloomAmpMaxSlider.value) / 10;
+        bloomAmpMaxValue.textContent = signalAmpMax.toFixed(1) + "×";
+      });
+
+      function setBloomMode(mode) {
+        signalMode = mode;
+        bloomModeBloom.classList.toggle("active", mode === "Bloom");
+        bloomModeBurn.classList.toggle("active",  mode === "Burn");
+      }
+      bloomModeBloom.addEventListener("click", () => setBloomMode("Bloom"));
+      bloomModeBurn.addEventListener("click",  () => setBloomMode("Burn"));
     });
   </script>
 </body>
