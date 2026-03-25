@@ -11,6 +11,7 @@ let brushes = ["Pixel Shift", "Data Noise", "Signal Bloom", "Spectral Swap", "Ch
 let history = [];
 let maxHistory = 10;
 let isDrawing = false;
+let compareSnapshot = null;
 let brushSizeMultiplier = 1.0;
 let brushIntensity = 1.0;
 let brushOpacity = 1.0;
@@ -112,6 +113,21 @@ function keyPressed() {
   if (key === 'z' || key === 'Z') undoLast();
   // C: clear
   if (key === 'c' || key === 'C') resetCanvas();
+  // S: save
+  if (key === 's' || key === 'S') saveCanvas('GlitchArt', 'png');
+  // O: hold to compare with original
+  if ((key === 'o' || key === 'O') && userImg && !compareSnapshot) {
+    compareSnapshot = get();
+    background(bgColor);
+    image(scaledImg, imgX, imgY, imgW, imgH);
+  }
+}
+
+function keyReleased() {
+  if ((key === 'o' || key === 'O') && compareSnapshot) {
+    image(compareSnapshot, 0, 0);
+    compareSnapshot = null;
+  }
 }
 
 function windowResized() {

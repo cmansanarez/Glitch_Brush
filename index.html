@@ -279,6 +279,41 @@
       display: none;
     }
 
+    /* ── Sample crosshair (Pixel Shift) ── */
+    #sample-crosshair {
+      position: fixed;
+      pointer-events: none;
+      transform: translate(-50%, -50%);
+      z-index: 51;
+      display: none;
+      width: 20px;
+      height: 20px;
+    }
+
+    #sample-crosshair::before,
+    #sample-crosshair::after {
+      content: '';
+      position: absolute;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+    }
+
+    /* horizontal arm */
+    #sample-crosshair::before {
+      width: 100%;
+      height: 1px;
+      top: calc(50% - 0.5px);
+      left: 0;
+    }
+
+    /* vertical arm */
+    #sample-crosshair::after {
+      width: 1px;
+      height: 100%;
+      top: 0;
+      left: calc(50% - 0.5px);
+    }
+
     /* ── Brush cursor indicator ── */
     #brush-cursor {
       position: fixed;
@@ -428,24 +463,25 @@
 
     <div class="divider"></div>
 
-    <span class="label">Background</span>
-    <input id="bg-color" type="color" value="#141414" />
-
-    <div class="divider"></div>
-
     <button id="undo-btn">Undo</button>
     <button id="clear-btn">Clear</button>
     <button id="save-btn">Save</button>
 
     <div class="divider"></div>
 
+    <span class="label">Background</span>
+    <input id="bg-color" type="color" value="#141414" />
+
+    <div class="divider"></div>
+
     <span class="label" style="line-height:1.6;">
-      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear
+      1–8 brush &nbsp;·&nbsp; Z undo<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; hold O compare
     </span>
   </div>
 
   <!-- Brush size indicator — floats above canvas, never touches pixels -->
   <div id="brush-cursor"></div>
+  <div id="sample-crosshair"></div>
 
   <!-- Centered prompt shown before an image is loaded -->
   <div id="hint">
@@ -501,26 +537,46 @@
       };
 
       function updateCursorSize() {
-        const base = brushDiameters[currentBrush] || 40;
-        const multiplier = sizeSlider.value / 100;
-        const d = Math.round(base * multiplier);
-        brushCursor.style.width  = d + "px";
-        brushCursor.style.height = d + "px";
+        const mult = sizeSlider.value / 100;
+        if (currentBrush === "Scan Line") {
+          // Actual footprint: H = 160×120, V = 120×160
+          const cw = Math.round((scanLineDir === "V" ? 120 : 160) * mult);
+          const ch = Math.round((scanLineDir === "V" ? 160 : 120) * mult);
+          brushCursor.style.width        = cw + "px";
+          brushCursor.style.height       = ch + "px";
+          brushCursor.style.borderRadius = "4px";
+        } else {
+          const d = Math.round((brushDiameters[currentBrush] || 40) * mult);
+          brushCursor.style.width        = d + "px";
+          brushCursor.style.height       = d + "px";
+          brushCursor.style.borderRadius = brushShape === "square" ? "3px" : "50%";
+        }
       }
 
       // Show/hide cursor only over the p5 canvas
+      const sampleCrosshair = document.getElementById("sample-crosshair");
+
       document.addEventListener("mousemove", (e) => {
         if (e.target && e.target.tagName === "CANVAS") {
           brushCursor.style.display = "block";
           brushCursor.style.left = e.clientX + "px";
           brushCursor.style.top  = e.clientY + "px";
+          if (currentBrush === "Pixel Shift") {
+            sampleCrosshair.style.display = "block";
+            sampleCrosshair.style.left = e.clientX + "px";
+            sampleCrosshair.style.top  = e.clientY + "px";
+          } else {
+            sampleCrosshair.style.display = "none";
+          }
         } else {
           brushCursor.style.display = "none";
+          sampleCrosshair.style.display = "none";
         }
       });
 
       document.addEventListener("mouseleave", () => {
         brushCursor.style.display = "none";
+        sampleCrosshair.style.display = "none";
       });
 
       updateCursorSize();
@@ -549,7 +605,9 @@
 
       function setShape(shape) {
         brushShape = shape;
-        brushCursor.style.borderRadius = shape === "square" ? "3px" : "50%";
+        if (currentBrush !== "Scan Line") {
+          brushCursor.style.borderRadius = shape === "square" ? "3px" : "50%";
+        }
         shapeCircleBtn.classList.toggle("active", shape === "circle");
         shapeSquareBtn.classList.toggle("active", shape === "square");
       }
@@ -572,6 +630,7 @@
         updateCursorSize();
         switchContextPanel(brushSel.value);
         updateBrushHint(brushSel.value);
+        if (currentBrush !== "Pixel Shift") sampleCrosshair.style.display = "none";
       });
 
       fileInput.addEventListener("change", (e) => {
@@ -721,6 +780,7 @@
         scanLineDir = dir;
         slH.classList.toggle("active", dir === "H");
         slV.classList.toggle("active", dir === "V");
+        updateCursorSize();
       }
       slH.addEventListener("click", () => setScanLineDir("H"));
       slV.addEventListener("click", () => setScanLineDir("V"));
