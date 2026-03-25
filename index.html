@@ -256,6 +256,11 @@
       text-align: center;
     }
 
+    #randomize-btn,
+    #generate-btn {
+      text-align: center;
+    }
+
     #save-btn:hover {
       background: rgba(120, 180, 255, 0.1);
       border-color: rgba(120, 180, 255, 0.4);
@@ -1011,6 +1016,25 @@
         switchContextPanel(currentBrush);
         updateBrushHint(currentBrush);
         if (currentBrush !== "Pixel Shift") sampleCrosshair.style.display = "none";
+        // Sync brush-specific panel controls
+        setSortDir(pixelSortDir);
+        caMinSlider.value = caMinOffset;
+        caMinValue.textContent = caMinOffset + "px";
+        spectralHueSlider.value = spectralHueTarget;
+        updateSpectralPreview(spectralHueTarget);
+        bitDepthSlider.value = bitDepthVal;
+        bitDepthValue.textContent = bitDepthVal;
+        bitBlockSlider.value = bitBlockSize;
+        bitBlockValue.textContent = bitBlockSize + "px";
+        bitDitherBtn.textContent = bitDither ? "Dither: ON" : "Dither: OFF";
+        bitDitherBtn.classList.toggle("active", bitDither);
+        setDataNoiseDir(dataNoiseDir);
+        setScanLineDir(scanLineDir);
+        bloomAmpMinSlider.value = Math.round(signalAmpMin * 10);
+        bloomAmpMinValue.textContent = signalAmpMin.toFixed(1) + "×";
+        bloomAmpMaxSlider.value = Math.round(signalAmpMax * 10);
+        bloomAmpMaxValue.textContent = signalAmpMax.toFixed(1) + "×";
+        setBloomMode(signalMode);
       };
 
       document.getElementById("randomize-btn").addEventListener("click", () => randomizeBrush());

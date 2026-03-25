@@ -126,6 +126,8 @@ function keyPressed() {
     generateCanvas();
     if (typeof window.hideHint === 'function') window.hideHint();
   }
+  // R: randomize brush
+  if (key === 'r' || key === 'R') randomizeBrush();
 }
 
 function keyReleased() {
@@ -667,6 +669,34 @@ function hsbToRgb(h, s, v) {
   return [r * 255, g * 255, b * 255];
 }
 1
+
+
+// ---------------------------
+// Randomize Brush
+// ---------------------------
+
+function randomizeBrush() {
+  currentBrush        = brushes[floor(random(brushes.length))];
+  brushSizeMultiplier = random(0.5, 2.0);
+  brushIntensity      = random(0.3, 1.0);
+  brushOpacity        = random(0.5, 1.0);
+  brushShape          = random(1) < 0.7 ? "circle" : "square";
+
+  // Brush-specific params
+  pixelSortDir      = ["Auto", "H", "V"][floor(random(3))];
+  caMinOffset       = floor(random(0, 16));
+  spectralHueTarget = floor(random(0, 360));
+  bitDepthVal       = floor(random(1, 7));
+  bitBlockSize      = floor(random(1, 9));
+  bitDither         = random(1) < 0.3;
+  dataNoiseDir      = ["H", "V", "Both"][floor(random(3))];
+  scanLineDir       = random(1) < 0.5 ? "H" : "V";
+  signalAmpMin      = random(1.0, 2.0);
+  signalAmpMax      = random(signalAmpMin + 0.2, 4.0);
+  signalMode        = random(1) < 0.5 ? "Bloom" : "Burn";
+
+  if (typeof window.syncRandomizedBrush === 'function') window.syncRandomizedBrush();
+}
 
 
 // ---------------------------
