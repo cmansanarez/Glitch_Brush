@@ -298,6 +298,12 @@
       <span id="intensity-value" class="slider-val">100%</span>
     </div>
 
+    <span class="label">Opacity</span>
+    <div class="slider-row">
+      <input id="opacity-slider" type="range" min="0" max="100" value="100" step="5" />
+      <span id="opacity-value" class="slider-val">100%</span>
+    </div>
+
     <span class="label">Shape</span>
     <div id="shape-group">
       <button id="shape-circle" class="active">Circle</button>
@@ -412,6 +418,14 @@
       intensitySlider.addEventListener("input", () => {
         brushIntensity = intensitySlider.value / 100;
         intensityValue.textContent = intensitySlider.value + "%";
+      });
+
+      const opacitySlider = document.getElementById("opacity-slider");
+      const opacityValue  = document.getElementById("opacity-value");
+
+      opacitySlider.addEventListener("input", () => {
+        brushOpacity = opacitySlider.value / 100;
+        opacityValue.textContent = opacitySlider.value + "%";
       });
 
       const shapeCircleBtn = document.getElementById("shape-circle");

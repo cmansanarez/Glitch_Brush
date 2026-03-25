@@ -13,6 +13,7 @@ let maxHistory = 10;
 let isDrawing = false;
 let brushSizeMultiplier = 1.0;
 let brushIntensity = 1.0;
+let brushOpacity = 1.0;
 let brushShape = "circle";
 let bgColor = '#141414';
 
@@ -27,31 +28,32 @@ function setup() {
 
 function draw() {
   if (!userImg || !isDrawing) return;
+
+  let preRegion, rx, ry, rw, rh;
+  if (brushOpacity < 1.0) {
+    let pad = getBrushPad();
+    rx = max(0, mouseX - pad);
+    ry = max(0, mouseY - pad);
+    rw = min(width,  mouseX + pad) - rx;
+    rh = min(height, mouseY + pad) - ry;
+    preRegion = get(rx, ry, rw, rh);
+  }
+
   switch (currentBrush) {
-      case "Pixel Shift":
-        applyPixelShift();
-        break;
-      case "Data Noise":
-        applyDataNoise();
-        break;
-      case "Signal Bloom":
-        applySignalBloom();
-        break;
-      case "Spectral Swap":
-        applySpectralSwap();
-        break;
-      case "Chromatic Aberration":
-        applyChromaticAberration();
-        break;
-      case "Scan Line":
-        applyScanLine();
-        break;
-      case "Bitcrush":
-        applyBitcrush();
-        break;
-      case "Pixel Sort":
-        applyPixelSort();
-        break;
+    case "Pixel Shift":          applyPixelShift();          break;
+    case "Data Noise":           applyDataNoise();           break;
+    case "Signal Bloom":         applySignalBloom();         break;
+    case "Spectral Swap":        applySpectralSwap();        break;
+    case "Chromatic Aberration": applyChromaticAberration(); break;
+    case "Scan Line":            applyScanLine();            break;
+    case "Bitcrush":             applyBitcrush();            break;
+    case "Pixel Sort":           applyPixelSort();           break;
+  }
+
+  if (preRegion) {
+    tint(255, (1 - brushOpacity) * 255);
+    image(preRegion, rx, ry);
+    noTint();
   }
 }
 
@@ -472,6 +474,20 @@ function applyPixelSort() {
 // ---------------------------
 // UI + Utilities
 // ---------------------------
+function getBrushPad() {
+  const pads = {
+    "Pixel Shift":           55,
+    "Data Noise":            40,
+    "Signal Bloom":          10,
+    "Spectral Swap":         15,
+    "Chromatic Aberration":  20,
+    "Scan Line":             80,
+    "Bitcrush":              30,
+    "Pixel Sort":            40
+  };
+  return int((pads[currentBrush] || 40) * brushSizeMultiplier);
+}
+
 function setupUI() {
   brushSelector = createSelect();
   brushSelector.position(20, 20);
