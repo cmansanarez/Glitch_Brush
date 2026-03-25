@@ -26,7 +26,6 @@ let scanLineDir       = "H";     // "H" | "V"
 let signalAmpMin      = 1.0;     // lower amp bound
 let signalAmpMax      = 2.5;     // upper amp bound
 let signalMode        = "Bloom"; // "Bloom" | "Burn"
-let symmetryMode      = "Off";  // "Off" | "H" | "V" | "Both"
 let brushShape = "circle";
 let bgColor = '#141414';
 
@@ -75,8 +74,6 @@ function draw() {
     image(preRegion, rx, ry);
     noTint();
   }
-
-  applySymmetryMirror();
 }
 
 function mousePressed(event) {
@@ -84,11 +81,8 @@ function mousePressed(event) {
   // not on toolbar buttons (which also bubble up to the document).
   if (event.target !== cnv.elt) return;
   if (userImg) {
-    let snap  = get();
-    let thumb = generateThumb();
-    history.push({snapshot: snap, thumb: thumb});
+    history.push(get());
     if (history.length > maxHistory) history.shift();
-    window.updateHistoryStrip?.();
     isDrawing = true;
   }
 }
@@ -121,8 +115,6 @@ function keyPressed() {
   if (key === 'c' || key === 'C') resetCanvas();
   // S: save
   if (key === 's' || key === 'S') saveCanvas('GlitchArt', 'png');
-  // R: randomize brush
-  if (key === 'r' || key === 'R') randomizeBrush();
   // O: hold to compare with original
   if ((key === 'o' || key === 'O') && userImg && !compareSnapshot) {
     compareSnapshot = get();
@@ -566,48 +558,6 @@ function getBrushPad() {
   return int((pads[currentBrush] || 40) * brushSizeMultiplier);
 }
 
-
-function applySymmetryMirror() {
-  if (symmetryMode === "Off") return;
-  let pad     = getBrushPad();
-  let rx      = max(0, mouseX - pad);
-  let ry      = max(0, mouseY - pad);
-  let rw      = min(width,  mouseX + pad) - rx;
-  let rh      = min(height, mouseY + pad) - ry;
-  let painted = get(rx, ry, rw, rh);
-  let lx      = rx - mouseX;
-  let ly      = ry - mouseY;
-  if (symmetryMode === "H" || symmetryMode === "Both") {
-    push(); translate(width - mouseX, mouseY);          scale(-1,  1); image(painted, lx, ly, rw, rh); pop();
-  }
-  if (symmetryMode === "V" || symmetryMode === "Both") {
-    push(); translate(mouseX,         height - mouseY); scale( 1, -1); image(painted, lx, ly, rw, rh); pop();
-  }
-  if (symmetryMode === "Both") {
-    push(); translate(width - mouseX, height - mouseY); scale(-1, -1); image(painted, lx, ly, rw, rh); pop();
-  }
-}
-
-function generateThumb() {
-  let thumbW = 80;
-  let thumbH = max(1, round(thumbW * height / width));
-  let tmp    = document.createElement('canvas');
-  tmp.width  = thumbW;
-  tmp.height = thumbH;
-  tmp.getContext('2d').drawImage(cnv.elt, 0, 0, thumbW, thumbH);
-  return tmp.toDataURL('image/jpeg', 0.75);
-}
-
-function randomizeBrush() {
-  let idx             = floor(random(brushes.length));
-  currentBrush        = brushes[idx];
-  brushSizeMultiplier = random(0.4, 2.0);
-  brushIntensity      = random(0.3, 1.0);
-  brushOpacity        = random(0.5, 1.0);
-  brushShape          = random(1) < 0.5 ? "circle" : "square";
-  window.syncRandomizedBrush?.();
-}
-
 function setupUI() {
   brushSelector = createSelect();
   brushSelector.position(20, 20);
@@ -639,16 +589,14 @@ function handleImageUpload(file) {
       scaleAndCenterImage();
       image(scaledImg, imgX, imgY, imgW, imgH);
       history = [];
-      window.updateHistoryStrip?.();
     });
   }
 }
 
 function undoLast() {
   if (history.length > 0) {
-    let entry = history.pop();
-    image(entry.snapshot, 0, 0);
-    window.updateHistoryStrip?.();
+    let last = history.pop();
+    image(last, 0, 0);
   }
 }
 
@@ -657,7 +605,6 @@ function resetCanvas() {
     background(bgColor);
     image(scaledImg, imgX, imgY, imgW, imgH);
     history = [];
-    window.updateHistoryStrip?.();
   }
 }
 
@@ -714,3 +661,4 @@ function hsbToRgb(h, s, v) {
   }
   return [r * 255, g * 255, b * 255];
 }
+1
