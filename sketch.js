@@ -742,7 +742,23 @@ function randomizeBrush() {
 // Generative Canvas
 // ---------------------------
 
+// generateCanvas() kicks off an async photo fetch from Lorem Picsum (free, no API key).
+// Seeds are locked in before the fetch so the generative composition is deterministic
+// regardless of when the callback fires.
 function generateCanvas() {
+  const genSeed = Math.floor(Math.random() * 99999);
+  const imgSeed = Math.floor(Math.random() * 1000) + 1;
+  const fetchW  = min(width,  1920);
+  const fetchH  = min(height, 1080);
+
+  loadImage(
+    `https://picsum.photos/${fetchW}/${fetchH}?random=${imgSeed}`,
+    (photo) => _buildGenerativeCanvas(photo, genSeed),
+    ()      => _buildGenerativeCanvas(null,  genSeed)   // offline / CORS fallback
+  );
+}
+
+function _buildGenerativeCanvas(photo, seed) {
   // Palette: Chartreuse, Pure Red, Black, Azure Blue, Vivid Tangerine, Lipstick Red, Parchment
   const pal = [
     [188, 248,   4],
@@ -754,8 +770,8 @@ function generateCanvas() {
     [245, 239, 237],
   ];
 
-  noiseSeed(floor(millis()));
-  randomSeed(floor(millis() + 1));
+  noiseSeed(seed);
+  randomSeed(seed + 1);
 
   background(0);
 
@@ -772,11 +788,10 @@ function generateCanvas() {
     [noisePal[i], noisePal[j]] = [noisePal[j], noisePal[i]];
   }
 
-  // Three octaves: large region shapes + mid detail + fine grain
-  const bs  = floor(random(4, 9));        // block pixel size 4–8
-  const sc1 = random(0.003, 0.007);       // coarse → big colour regions
-  const sc2 = random(0.015, 0.035);       // medium → panel detail
-  const sc3 = random(0.07, 0.16);         // fine   → texture grain
+  const bs  = floor(random(4, 9));
+  const sc1 = random(0.003, 0.007);
+  const sc2 = random(0.015, 0.035);
+  const sc3 = random(0.07, 0.16);
   noStroke();
   for (let y = 0; y < height; y += bs) {
     for (let x = 0; x < width; x += bs) {
@@ -790,8 +805,18 @@ function generateCanvas() {
     }
   }
 
+  // ── Photo layer ───────────────────────────────────────────────────────
+  // Drawn after the noise field so photographic form ghosts through the abstraction.
+  // Opacity is randomized each generation (35–65%) so the balance shifts.
+  if (photo) {
+    let photoOpacity = floor(random(90, 170));
+    tint(255, photoOpacity);
+    image(photo, 0, 0, width, height);
+    noTint();
+  }
+
   // ── Layer 2: Scan-shift bands ─────────────────────────────────────────
-  // Pixel-shift horizontal slices — baked glitch before any brush touches it
+  // Now cuts across the noise + photo composite together
   loadPixels();
   let numBands = floor(random(4, 10));
   for (let b = 0; b < numBands; b++) {
@@ -820,10 +845,8 @@ function generateCanvas() {
     let c  = pal[ci];
     fill(c[0], c[1], c[2], floor(random(20, 165)));
     if (random(1) < 0.38) {
-      // Wide, thin scan-band stripe — full canvas width
       rect(0, floor(random(height)), width, floor(random(1, 7)));
     } else {
-      // Rectangular block — varying sizes and positions
       rect(
         floor(random(-60, width  * 0.72)),
         floor(random(-40, height)),
@@ -837,8 +860,8 @@ function generateCanvas() {
   let numLines = floor(random(2, 8));
   for (let i = 0; i < numLines; i++) {
     let c           = pal[floor(random(pal.length))];
-    let lineOpacity = floor(random(51, 256));   // 20–100%
-    let lineWeight  = floor(random(3, 16));     // 3–15px
+    let lineOpacity = floor(random(51, 256));
+    let lineWeight  = floor(random(3, 16));
     stroke(c[0], c[1], c[2], lineOpacity);
     strokeWeight(lineWeight);
     let ly = floor(random(height));
@@ -851,10 +874,10 @@ function generateCanvas() {
   noStroke();
   let grainCount = floor(width * height * 0.003);
   for (let i = 0; i < grainCount; i++) {
-    let gs  = floor(random(1, 6));             // grain size 1–5px
-    let px  = floor(random(width));
-    let py  = floor(random(height));
-    let c   = pal[floor(random(pal.length))];
+    let gs = floor(random(1, 6));
+    let px = floor(random(width));
+    let py = floor(random(height));
+    let c  = pal[floor(random(pal.length))];
     fill(c[0], c[1], c[2]);
     rect(px, py, gs, gs);
   }
