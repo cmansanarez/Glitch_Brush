@@ -721,6 +721,18 @@ function generateCanvas() {
   background(0);
 
   // ── Layer 1: Block-sampled Perlin noise field ─────────────────────────
+  // Build a fresh sub-palette each generation: always black + 2–4 random others
+  const nonBlack = pal.filter(c => c[0] !== 0 || c[1] !== 0 || c[2] !== 0);
+  for (let i = nonBlack.length - 1; i > 0; i--) {
+    let j = floor(random(i + 1));
+    [nonBlack[i], nonBlack[j]] = [nonBlack[j], nonBlack[i]];
+  }
+  const noisePal = [[0, 0, 0], ...nonBlack.slice(0, floor(random(2, 5)))];
+  for (let i = noisePal.length - 1; i > 0; i--) {
+    let j = floor(random(i + 1));
+    [noisePal[i], noisePal[j]] = [noisePal[j], noisePal[i]];
+  }
+
   // Three octaves: large region shapes + mid detail + fine grain
   const bs  = floor(random(4, 9));        // block pixel size 4–8
   const sc1 = random(0.003, 0.007);       // coarse → big colour regions
@@ -732,8 +744,8 @@ function generateCanvas() {
       let n = noise(x * sc1,       y * sc1      ) * 0.55
             + noise(x * sc2 + 40,  y * sc2 + 40 ) * 0.30
             + noise(x * sc3 + 80,  y * sc3 + 80 ) * 0.15;
-      let ci = floor(n * pal.length) % pal.length;
-      let c  = pal[ci];
+      let ci = floor(n * noisePal.length) % noisePal.length;
+      let c  = noisePal[ci];
       fill(c[0], c[1], c[2]);
       rect(x, y, bs, bs);
     }
@@ -785,26 +797,28 @@ function generateCanvas() {
   // ── Layer 4: Hard palette lines ───────────────────────────────────────
   let numLines = floor(random(2, 8));
   for (let i = 0; i < numLines; i++) {
-    let c = pal[floor(random(pal.length))];
-    stroke(c[0], c[1], c[2]);
-    strokeWeight(random(1) < 0.68 ? 1 : floor(random(2, 5)));
-    line(0, floor(random(height)), width, floor(random(height)));
+    let c           = pal[floor(random(pal.length))];
+    let lineOpacity = floor(random(51, 256));   // 20–100%
+    let lineWeight  = floor(random(3, 16));     // 3–15px
+    stroke(c[0], c[1], c[2], lineOpacity);
+    strokeWeight(lineWeight);
+    let ly = floor(random(height));
+    line(0, ly, width, ly);
   }
   noStroke();
+  strokeWeight(1);
 
   // ── Layer 5: Sparse pixel scatter ─────────────────────────────────────
-  loadPixels();
-  let grainCount = floor(width * height * 0.004);
+  noStroke();
+  let grainCount = floor(width * height * 0.003);
   for (let i = 0; i < grainCount; i++) {
+    let gs  = floor(random(1, 6));             // grain size 1–5px
     let px  = floor(random(width));
     let py  = floor(random(height));
     let c   = pal[floor(random(pal.length))];
-    let idx = (py * width + px) * 4;
-    pixels[idx]     = c[0];
-    pixels[idx + 1] = c[1];
-    pixels[idx + 2] = c[2];
+    fill(c[0], c[1], c[2]);
+    rect(px, py, gs, gs);
   }
-  updatePixels();
 
   // ── Register as active image so all brushes work immediately ─────────
   userImg   = get();
