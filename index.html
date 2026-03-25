@@ -415,6 +415,7 @@
 
     <label id="upload-label" for="file-input">Upload Image</label>
     <input id="file-input" type="file" accept="image/png, image/jpeg" />
+    <button id="generate-btn">Generate Canvas</button>
 
     <div class="divider"></div>
 
@@ -547,7 +548,7 @@
     <div class="divider"></div>
 
     <span class="label" style="line-height:1.6;">
-      1–8 brush &nbsp;·&nbsp; Z undo &nbsp;·&nbsp; R random<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; hold O compare
+      1–8 brush &nbsp;·&nbsp; Z undo &nbsp;·&nbsp; R random<br>C clear &nbsp;·&nbsp; S save &nbsp;·&nbsp; G gen<br>hold O compare
     </span>
 
     <div class="divider"></div>
@@ -576,8 +577,8 @@
   <div id="hint">
     <img src="favicon.png" style="width:52px; height:52px; opacity:0.18; margin-bottom:14px; display:block; margin-left:auto; margin-right:auto;" /><br>
     <span style="font-size:17px; opacity:0.55; letter-spacing:0.12em;">Noise Palette</span><br>
-    Upload an image to begin.<br>
-    <span style="font-size:11px; opacity:0.6;">JPG or PNG &nbsp;·&nbsp; Max recommended: 4000 × 4000 px</span>
+    Upload an image or generate one to begin.<br>
+    <span style="font-size:11px; opacity:0.6;">JPG or PNG &nbsp;·&nbsp; Max recommended: 4000 × 4000 px &nbsp;·&nbsp; G to generate</span>
   </div>
 
   <!-- Patch canvas context creation so pixel-read-heavy brushes perform well.
@@ -608,6 +609,7 @@
       const undoBtn    = document.getElementById("undo-btn");
       const clearBtn   = document.getElementById("clear-btn");
       const saveBtn          = document.getElementById("save-btn");
+      const generateBtn      = document.getElementById("generate-btn");
       const brushCursor      = document.getElementById("brush-cursor");
       const sizeSlider       = document.getElementById("size-slider");
       const sizeValue        = document.getElementById("size-value");
@@ -775,6 +777,11 @@
       undoBtn.addEventListener("click", () => undoLast());
       clearBtn.addEventListener("click", () => resetCanvas());
       saveBtn.addEventListener("click", () => saveCanvas("GlitchArt", "png"));
+      generateBtn.addEventListener("click", () => {
+        generateCanvas();
+        hint.classList.add("hidden");
+      });
+      window.hideHint = () => hint.classList.add("hidden");
 
       // ── Brush behavioral hints ───────────────────────────────────────────
       const brushHints = {

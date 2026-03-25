@@ -121,6 +121,11 @@ function keyPressed() {
     background(bgColor);
     image(scaledImg, imgX, imgY, imgW, imgH);
   }
+  // G: generate canvas
+  if (key === 'g' || key === 'G') {
+    generateCanvas();
+    if (typeof window.hideHint === 'function') window.hideHint();
+  }
 }
 
 function keyReleased() {
@@ -662,3 +667,120 @@ function hsbToRgb(h, s, v) {
   return [r * 255, g * 255, b * 255];
 }
 1
+
+
+// ---------------------------
+// Generative Canvas
+// ---------------------------
+
+function generateCanvas() {
+  // Palette: Chartreuse, Pure Red, Black, Azure Blue, Vivid Tangerine, Lipstick Red, Parchment
+  const pal = [
+    [188, 248,   4],
+    [250,  19,  15],
+    [  0,   0,   0],
+    [ 29, 127, 250],
+    [252, 130,  23],
+    [246,  40,  71],
+    [245, 239, 237],
+  ];
+
+  noiseSeed(floor(millis()));
+  randomSeed(floor(millis() + 1));
+
+  background(0);
+
+  // ── Layer 1: Block-sampled Perlin noise field ─────────────────────────
+  // Three octaves: large region shapes + mid detail + fine grain
+  const bs  = floor(random(4, 9));        // block pixel size 4–8
+  const sc1 = random(0.003, 0.007);       // coarse → big colour regions
+  const sc2 = random(0.015, 0.035);       // medium → panel detail
+  const sc3 = random(0.07, 0.16);         // fine   → texture grain
+  noStroke();
+  for (let y = 0; y < height; y += bs) {
+    for (let x = 0; x < width; x += bs) {
+      let n = noise(x * sc1,       y * sc1      ) * 0.55
+            + noise(x * sc2 + 40,  y * sc2 + 40 ) * 0.30
+            + noise(x * sc3 + 80,  y * sc3 + 80 ) * 0.15;
+      let ci = floor(n * pal.length) % pal.length;
+      let c  = pal[ci];
+      fill(c[0], c[1], c[2]);
+      rect(x, y, bs, bs);
+    }
+  }
+
+  // ── Layer 2: Scan-shift bands ─────────────────────────────────────────
+  // Pixel-shift horizontal slices — baked glitch before any brush touches it
+  loadPixels();
+  let numBands = floor(random(4, 10));
+  for (let b = 0; b < numBands; b++) {
+    let src   = new Uint8ClampedArray(pixels);
+    let by    = floor(random(height));
+    let bh    = floor(random(1, 11));
+    let shift = floor(random(-130, 130));
+    for (let y = by; y < min(by + bh, height); y++) {
+      for (let x = 0; x < width; x++) {
+        let sx = constrain(x + shift, 0, width - 1);
+        let di = (y * width + x)  * 4;
+        let si = (y * width + sx) * 4;
+        pixels[di]     = src[si];
+        pixels[di + 1] = src[si + 1];
+        pixels[di + 2] = src[si + 2];
+      }
+    }
+  }
+  updatePixels();
+
+  // ── Layer 3: Translucent geometric overlays ───────────────────────────
+  noStroke();
+  let numRects = floor(random(5, 14));
+  for (let i = 0; i < numRects; i++) {
+    let ci = floor(random(pal.length));
+    let c  = pal[ci];
+    fill(c[0], c[1], c[2], floor(random(20, 165)));
+    if (random(1) < 0.38) {
+      // Wide, thin scan-band stripe — full canvas width
+      rect(0, floor(random(height)), width, floor(random(1, 7)));
+    } else {
+      // Rectangular block — varying sizes and positions
+      rect(
+        floor(random(-60, width  * 0.72)),
+        floor(random(-40, height)),
+        floor(random(20,  width  * 0.7)),
+        floor(random(8,   height * 0.42))
+      );
+    }
+  }
+
+  // ── Layer 4: Hard palette lines ───────────────────────────────────────
+  let numLines = floor(random(2, 8));
+  for (let i = 0; i < numLines; i++) {
+    let c = pal[floor(random(pal.length))];
+    stroke(c[0], c[1], c[2]);
+    strokeWeight(random(1) < 0.68 ? 1 : floor(random(2, 5)));
+    line(0, floor(random(height)), width, floor(random(height)));
+  }
+  noStroke();
+
+  // ── Layer 5: Sparse pixel scatter ─────────────────────────────────────
+  loadPixels();
+  let grainCount = floor(width * height * 0.004);
+  for (let i = 0; i < grainCount; i++) {
+    let px  = floor(random(width));
+    let py  = floor(random(height));
+    let c   = pal[floor(random(pal.length))];
+    let idx = (py * width + px) * 4;
+    pixels[idx]     = c[0];
+    pixels[idx + 1] = c[1];
+    pixels[idx + 2] = c[2];
+  }
+  updatePixels();
+
+  // ── Register as active image so all brushes work immediately ─────────
+  userImg   = get();
+  scaledImg = createImage(width, height);
+  scaledImg.copy(userImg, 0, 0, width, height, 0, 0, width, height);
+  imgX = 0;  imgY = 0;
+  imgW = width;  imgH = height;
+  history = [];
+}
