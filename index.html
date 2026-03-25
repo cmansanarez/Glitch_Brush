@@ -101,6 +101,17 @@
       background-position: right 10px center;
     }
 
+    /* Brush behavioral hint */
+    .brush-hint {
+      color: rgba(255, 255, 255, 0.28);
+      font-size: 10px;
+      font-style: italic;
+      letter-spacing: 0.02em;
+      line-height: 1.4;
+      user-select: none;
+      margin: 0;
+    }
+
     /* Upload label styled as button */
     #upload-label {
       display: flex;
@@ -299,6 +310,7 @@
       <option>Bitcrush</option>
       <option>Pixel Sort</option>
     </select>
+    <p id="brush-hint" class="brush-hint"></p>
 
     <div class="divider"></div>
 
@@ -559,6 +571,7 @@
         currentBrush = brushSel.value;
         updateCursorSize();
         switchContextPanel(brushSel.value);
+        updateBrushHint(brushSel.value);
       });
 
       fileInput.addEventListener("change", (e) => {
@@ -580,6 +593,23 @@
       undoBtn.addEventListener("click", () => undoLast());
       clearBtn.addEventListener("click", () => resetCanvas());
       saveBtn.addEventListener("click", () => saveCanvas("GlitchArt", "png"));
+
+      // ── Brush behavioral hints ───────────────────────────────────────────
+      const brushHints = {
+        "Pixel Shift":          "colors sampled from image · randomized scatter",
+        "Data Noise":           "warps from source image · set axis to direct smear",
+        "Signal Bloom":         "strokes accumulate — approaches white or black",
+        "Spectral Swap":        "intensity blends toward hue target",
+        "Chromatic Aberration": "move fast for wider fringe",
+        "Scan Line":            "noise-shifts rows or columns · intensity = max displacement",
+        "Bitcrush":             "depth + block are independent · dither adds texture",
+        "Pixel Sort":           "sorts by brightness · drag direction sets axis",
+      };
+      const brushHintEl = document.getElementById("brush-hint");
+      function updateBrushHint(name) {
+        brushHintEl.textContent = brushHints[name] || "";
+      }
+      updateBrushHint(currentBrush);
 
       // ── Contextual brush options ──────────────────────────────────────
 
