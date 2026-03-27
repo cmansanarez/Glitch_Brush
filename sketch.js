@@ -870,16 +870,33 @@ function _buildGenerativeCanvas(photo, seed) {
   noStroke();
   strokeWeight(1);
 
-  // ── Layer 5: Sparse pixel scatter ─────────────────────────────────────
-  noStroke();
-  let grainCount = floor(width * height * 0.003);
-  for (let i = 0; i < grainCount; i++) {
-    let gs = floor(random(1, 6));
-    let px = floor(random(width));
-    let py = floor(random(height));
-    let c  = pal[floor(random(pal.length))];
-    fill(c[0], c[1], c[2]);
-    rect(px, py, gs, gs);
+  // ── Layer 5: Photo pixelation patches ────────────────────────────────
+  // Random regions of the source photo are re-rendered as large pixel blocks,
+  // each patch with its own block size and opacity — readable photo content
+  // crushed into geometry, sitting against the glitch field beneath.
+  if (photo) {
+    photo.loadPixels();
+    const scaleX    = photo.width  / width;
+    const scaleY    = photo.height / height;
+    let numPatches  = floor(random(3, 9));
+    noStroke();
+    for (let p = 0; p < numPatches; p++) {
+      let px      = floor(random(width));
+      let py      = floor(random(height));
+      let pw      = floor(random(width  * 0.06, width  * 0.28));
+      let ph      = floor(random(height * 0.06, height * 0.28));
+      let pxSize  = floor(random(8, 33));          // block size 8–32px
+      let opacity = floor(random(40, 256));        // per-patch opacity 16–100%
+      for (let by = py; by < py + ph; by += pxSize) {
+        for (let bx = px; bx < px + pw; bx += pxSize) {
+          let sx  = constrain(floor((bx + pxSize * 0.5) * scaleX), 0, photo.width  - 1);
+          let sy  = constrain(floor((by + pxSize * 0.5) * scaleY), 0, photo.height - 1);
+          let idx = (sy * photo.width + sx) * 4;
+          fill(photo.pixels[idx], photo.pixels[idx + 1], photo.pixels[idx + 2], opacity);
+          rect(bx, by, pxSize, pxSize);
+        }
+      }
+    }
   }
 
   // ── Register as active image so all brushes work immediately ─────────
