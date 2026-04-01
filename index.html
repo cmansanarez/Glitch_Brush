@@ -321,22 +321,34 @@
       position: fixed;
       pointer-events: none;
       border-radius: 50%;
-      border: 1px solid rgba(255, 255, 255, 0.55);
+      border: 1.5px solid rgba(255, 255, 255, 0.85);
       box-shadow:
-        0 0 0 1px rgba(0, 0, 0, 0.4),
-        0 0 8px 2px rgba(255, 255, 255, 0.18);
+        0 0 0 1px rgba(0, 0, 0, 0.5),
+        0 0 10px 3px rgba(255, 255, 255, 0.28);
       transform: translate(-50%, -50%);
       z-index: 50;
       display: none;
       transition: width 0.12s ease, height 0.12s ease;
     }
 
+    #brush-cursor::after {
+      content: '';
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
     /* ── Mirror cursors for symmetry ── */
     .cursor-mirror {
       position: fixed;
       pointer-events: none;
-      border: 1px dashed rgba(255, 255, 255, 0.3);
-      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25);
+      border: 1px dashed rgba(80, 200, 240, 0.65);
+      box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3), 0 0 6px 1px rgba(80, 200, 240, 0.2);
       transform: translate(-50%, -50%);
       z-index: 48;
       display: none;
@@ -398,6 +410,12 @@
 
   <!-- Toolbar — left vertical panel -->
   <div id="toolbar">
+    <label id="upload-label" for="file-input">Upload Image</label>
+    <input id="file-input" type="file" accept="image/png, image/jpeg" />
+    <button id="generate-btn">Generate Canvas</button>
+
+    <div class="divider"></div>
+
     <span class="label">Brush</span>
     <select id="brush-select">
       <option value="Pixel Shift">Pixel Shift (1)</option>
@@ -411,12 +429,6 @@
     </select>
     <p id="brush-hint" class="brush-hint"></p>
     <button id="randomize-btn">Randomize Brush</button>
-
-    <div class="divider"></div>
-
-    <label id="upload-label" for="file-input">Upload Image</label>
-    <input id="file-input" type="file" accept="image/png, image/jpeg" />
-    <button id="generate-btn">Generate Canvas</button>
 
     <div class="divider"></div>
 

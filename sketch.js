@@ -120,7 +120,8 @@ function mousePressed(event) {
   // not on toolbar buttons (which also bubble up to the document).
   if (event.target !== cnv.elt) return;
   if (userImg) {
-    history.push(get());
+    const snap = get();
+    history.push({ snapshot: snap, thumb: snap.canvas.toDataURL() });
     if (history.length > maxHistory) history.shift();
     isDrawing = true;
   }
@@ -642,7 +643,8 @@ function handleImageUpload(file) {
 function undoLast() {
   if (history.length > 0) {
     let last = history.pop();
-    image(last, 0, 0);
+    image(last.snapshot, 0, 0);
+    if (typeof window.updateHistoryStrip === 'function') window.updateHistoryStrip();
   }
 }
 
