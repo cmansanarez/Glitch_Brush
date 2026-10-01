@@ -752,14 +752,14 @@ function randomizeBrush() {
 
 
 // ---------------------------
-// Glitch (randomized brush pass over the user's own uploaded/current image)
+// Glitch (randomized, dramatic pass over the user's own uploaded/current image)
 // ---------------------------
 
-// Applies a batch of randomized brush dabs — random brush, random params per
-// dab via randomizeBrush(), random position and implied direction — directly
-// onto whatever image is currently loaded (upload or a prior Generate Canvas
-// result). Unlike Generate Canvas, this never touches Lorem Picsum; it only
-// glitches the pixels already on the canvas. The whole pass is one undo step.
+// Applies a batch of randomized, dragged brush strokes plus a couple of
+// whole-canvas glitch passes directly onto whatever image is currently loaded
+// (upload or a prior Generate Canvas result). Unlike Generate Canvas, this
+// never touches Lorem Picsum; it only glitches the pixels already on the
+// canvas. The whole pass is one undo step.
 function glitchImage() {
   if (!userImg || !scaledImg) return;
 
@@ -767,21 +767,111 @@ function glitchImage() {
   history.push({ snapshot: snap, thumb: snap.canvas.toDataURL() });
   if (history.length > maxHistory) history.shift();
 
-  const passes = floor(random(20, 40));
-  for (let i = 0; i < passes; i++) {
-    randomizeBrush();
-    let mx = random(imgX, imgX + imgW);
-    let my = random(imgY, imgY + imgH);
-    // Give direction-sensitive brushes (Chromatic Aberration, Pixel Sort) a
-    // plausible "previous position" implying motion, without any real mouse.
-    let angle = random(TWO_PI);
-    let d     = random(5, 40);
-    let pmx   = mx - cos(angle) * d;
-    let pmy   = my - sin(angle) * d;
-    paintDab(mx, my, pmx, pmy);
-  }
+  // Bold whole-canvas structure first — the localized strokes below then cut
+  // across it. Each is independently likely, so a given click might skip one.
+  if (random(1) < 0.8) applyFullCanvasBandShift(floor(random(3, 7)));
+  if (random(1) < 0.6) applyFullCanvasChannelShift();
+
+  const strokeCount = floor(random(10, 20));
+  for (let i = 0; i < strokeCount; i++) glitchStroke();
+
+  if (random(1) < 0.4) applyFullCanvasBandShift(floor(random(1, 4)));
 
   if (typeof window.updateHistoryStrip === 'function') window.updateHistoryStrip();
+}
+
+// One dragged stroke of a randomly-chosen brush: picks fresh random params via
+// randomizeBrush() (same as the "Randomize Brush" button), then walks a
+// synthetic drag path across a chunk of the image so direction-sensitive
+// brushes (Chromatic Aberration, Pixel Sort) see real implied motion instead
+// of a single stationary dab. Runs noticeably bigger/stronger than a manual
+// stroke would by design — a single-click "Glitch" needs to read as dramatic.
+function glitchStroke() {
+  randomizeBrush();
+  const baseSize      = brushSizeMultiplier;
+  const baseIntensity = brushIntensity;
+  const baseOpacity   = brushOpacity;
+  brushSizeMultiplier = constrain(baseSize * random(1.3, 2.2), 0.5, 3.0);
+  brushIntensity       = random(0.7, 1.0);
+  brushOpacity         = random(0.85, 1.0);
+
+  const x     = random(imgX, imgX + imgW);
+  const y     = random(imgY, imgY + imgH);
+  const angle = random(TWO_PI);
+  const diag  = dist(0, 0, imgW, imgH);
+  const len   = random(0.12, 0.4) * diag;
+  const radius = currentBrush === "Scan Line"
+    ? SCAN_LINE_RADIUS.long * brushSizeMultiplier
+    : (BRUSH_RADIUS[currentBrush] || 40) * brushSizeMultiplier;
+  const stepSize = max(8, radius * 0.6);
+  const steps    = max(5, floor(len / stepSize));
+
+  let px = x, py = y;
+  for (let i = 1; i <= steps; i++) {
+    // Small perpendicular wobble keeps the drag from looking like a perfectly
+    // straight ruled line — erratic reads more "glitch" than clean.
+    const wobble = random(-14, 14);
+    const nx = x + cos(angle) * (i * stepSize) + cos(angle + HALF_PI) * wobble;
+    const ny = y + sin(angle) * (i * stepSize) + sin(angle + HALF_PI) * wobble;
+    paintDab(nx, ny, px, py);
+    px = nx; py = ny;
+  }
+
+  // Restore the baseline randomizeBrush() values (what the toolbar is showing)
+  // so this stroke's amplification doesn't leak into the next manual stroke.
+  brushSizeMultiplier = baseSize;
+  brushIntensity      = baseIntensity;
+  brushOpacity         = baseOpacity;
+}
+
+// Shifts several full-width horizontal bands of the whole canvas left/right —
+// the classic "datamosh" tear. Each band reads from the result of the previous
+// one, so repeated bands can compound. Bypasses brushes/symmetry/opacity
+// entirely; this is a blunt, canvas-wide effect, not a localized stroke.
+function applyFullCanvasBandShift(numBands) {
+  loadPixels();
+  for (let b = 0; b < numBands; b++) {
+    let src   = new Uint8ClampedArray(pixels);
+    let by    = floor(random(height));
+    let bh    = floor(random(4, 40));
+    let shift = floor(random(-180, 180));
+    for (let y = by; y < min(by + bh, height); y++) {
+      for (let x = 0; x < width; x++) {
+        let sx = constrain(x + shift, 0, width - 1);
+        let di = (y * width + x)  * 4;
+        let si = (y * width + sx) * 4;
+        pixels[di]     = src[si];
+        pixels[di + 1] = src[si + 1];
+        pixels[di + 2] = src[si + 2];
+      }
+    }
+  }
+  updatePixels();
+}
+
+// Splits the red/blue channels apart across the ENTIRE canvas in opposite
+// directions — a global chromatic-aberration pass (no radius/falloff), for a
+// strong VHS-tracking-error look rather than the localized brush version.
+function applyFullCanvasChannelShift() {
+  loadPixels();
+  let src   = new Uint8ClampedArray(pixels);
+  let shift = floor(random(4, 30));
+  let angle = random(TWO_PI);
+  let dx    = Math.round(cos(angle) * shift);
+  let dy    = Math.round(sin(angle) * shift);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let di = (y * width + x) * 4;
+      let rx = constrain(x - dx, 0, width - 1);
+      let ry = constrain(y - dy, 0, height - 1);
+      let bx = constrain(x + dx, 0, width - 1);
+      let by = constrain(y + dy, 0, height - 1);
+      pixels[di]     = src[(ry * width + rx) * 4];
+      pixels[di + 2] = src[(by * width + bx) * 4 + 2];
+    }
+  }
+  updatePixels();
 }
 
 
