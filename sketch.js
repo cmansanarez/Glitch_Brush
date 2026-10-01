@@ -37,8 +37,22 @@ const bayer4 = [
   [15,  7, 13,  5]
 ];
 
-// UI elements
-let brushSelector, uploadButton, undoButton, clearButton, saveButton;
+// Canonical per-brush footprint radii (base, before brushSizeMultiplier).
+// Single source of truth shared by the stroke math below, getBrushPad()
+// (opacity-blend snapshot bounds), and getBrushCursorBox() (HTML cursor preview)
+// so the three never drift out of sync with each other.
+const BRUSH_RADIUS = {
+  "Pixel Shift":          50,
+  "Data Noise":           40,
+  "Signal Bloom":         10,
+  "Spectral Swap":        15,
+  "Chromatic Aberration": 20,
+  "Bitcrush":             30,
+  "Pixel Sort":           40
+};
+// Scan Line's footprint is directional/asymmetric rather than a single radius:
+// "short" is the extent across the shift axis, "long" is the extent along it.
+const SCAN_LINE_RADIUS = { short: 60, long: 80 };
 
 function setup() {
   cnv = createCanvas(windowWidth, windowHeight);
@@ -48,31 +62,32 @@ function setup() {
 
 function draw() {
   if (!userImg || !isDrawing) return;
+  paintDab(mouseX, mouseY, pmouseX, pmouseY);
+}
 
-  const positions = getMirrorPositions(mouseX, mouseY, pmouseX, pmouseY);
+// Paints one brush dab (plus any active symmetry mirrors) at an explicit
+// position, with opacity blending. Used by the live draw loop and by
+// glitchImage() to apply brushes at synthetic positions with no real mouse.
+function paintDab(mx, my, pmx, pmy) {
+  const positions = getMirrorPositions(mx, my, pmx, pmy);
 
   // Capture pre-stroke snapshots for every paint position before any brush runs
   let preRegions = null;
   if (brushOpacity < 1.0) {
     let pad = getBrushPad();
-    preRegions = positions.map(([mx, my]) => {
-      let rx = max(0, mx - pad);
-      let ry = max(0, my - pad);
-      let rw = min(width,  mx + pad) - rx;
-      let rh = min(height, my + pad) - ry;
+    preRegions = positions.map(([x, y]) => {
+      let rx = max(0, x - pad);
+      let ry = max(0, y - pad);
+      let rw = min(width,  x + pad) - rx;
+      let rh = min(height, y + pad) - ry;
       return { snap: get(rx, ry, rw, rh), rx, ry };
     });
   }
 
   // Paint at main position then each mirror position
-  const origMX = mouseX, origMY = mouseY;
-  const origPMX = pmouseX, origPMY = pmouseY;
-  for (let [mx, my, pmx, pmy] of positions) {
-    mouseX = mx; mouseY = my; pmouseX = pmx; pmouseY = pmy;
-    applyCurrentBrush();
+  for (let [x, y, px, py] of positions) {
+    applyBrushAt(currentBrush, x, y, px, py);
   }
-  mouseX = origMX; mouseY = origMY;
-  pmouseX = origPMX; pmouseY = origPMY;
 
   // Apply opacity fade over every affected region
   if (preRegions) {
@@ -102,16 +117,19 @@ function getMirrorPositions(mx, my, pmx, pmy) {
   return pos;
 }
 
-function applyCurrentBrush() {
-  switch (currentBrush) {
-    case "Pixel Shift":          applyPixelShift();          break;
-    case "Data Noise":           applyDataNoise();           break;
-    case "Signal Bloom":         applySignalBloom();         break;
-    case "Spectral Swap":        applySpectralSwap();        break;
-    case "Chromatic Aberration": applyChromaticAberration(); break;
-    case "Scan Line":            applyScanLine();            break;
-    case "Bitcrush":             applyBitcrush();            break;
-    case "Pixel Sort":           applyPixelSort();           break;
+// Dispatches a named brush at an explicit position, independent of the
+// currently-selected UI brush. Lets glitchImage() apply a different random
+// brush per dab without touching currentBrush/the toolbar.
+function applyBrushAt(brushName, mx, my, pmx, pmy) {
+  switch (brushName) {
+    case "Pixel Shift":          applyPixelShift(mx, my);           break;
+    case "Data Noise":           applyDataNoise(mx, my);            break;
+    case "Signal Bloom":         applySignalBloom(mx, my);          break;
+    case "Spectral Swap":        applySpectralSwap(mx, my);         break;
+    case "Chromatic Aberration": applyChromaticAberration(mx, my, pmx, pmy); break;
+    case "Scan Line":            applyScanLine(mx, my);             break;
+    case "Bitcrush":             applyBitcrush(mx, my);             break;
+    case "Pixel Sort":           applyPixelSort(mx, my, pmx, pmy);  break;
   }
 }
 
@@ -182,6 +200,11 @@ function windowResized() {
   if (userImg) {
     scaleAndCenterImage();
     image(scaledImg, imgX, imgY, imgW, imgH);
+    // Rebuilding from the source image discards any brush edits, so prior
+    // undo snapshots (sized for the old canvas) no longer apply — stale
+    // entries would otherwise restore at the wrong size/position.
+    history = [];
+    if (typeof window.updateHistoryStrip === 'function') window.updateHistoryStrip();
   } else {
     background(bgColor);
   }
@@ -198,12 +221,12 @@ function inBrushShape(x, y, r) {
 // ---------------------------
 
 // 1. Pixel Shift Brush
-function applyPixelShift() {
+function applyPixelShift(mouseX, mouseY) {
   noStroke();
 
   if (random(1) < 0.2 * brushIntensity) {
     let brushSize = int(random(1, 20));
-    let scatter   = 50 * brushSizeMultiplier;
+    let scatter   = BRUSH_RADIUS["Pixel Shift"] * brushSizeMultiplier;
     let glitchX   = mouseX + random(-scatter, scatter);
     let glitchY   = mouseY + random(-scatter, scatter);
 
@@ -244,11 +267,11 @@ function erasePixel(x, y, size) {
 }
 
 // 2. Data Noise Brush
-function applyDataNoise() {
+function applyDataNoise(mouseX, mouseY) {
   loadPixels();
   scaledImg.loadPixels();
 
-  let r = int(40 * brushSizeMultiplier);
+  let r = int(BRUSH_RADIUS["Data Noise"] * brushSizeMultiplier);
   for (let x = -r; x < r; x++) {
     for (let y = -r; y < r; y++) {
       if (!inBrushShape(x, y, r)) continue;
@@ -269,10 +292,10 @@ function applyDataNoise() {
 }
 
 // 3. Signal Bloom Brush
-function applySignalBloom() {
+function applySignalBloom(mouseX, mouseY) {
   loadPixels();
 
-  let r   = int(10 * brushSizeMultiplier);
+  let r   = int(BRUSH_RADIUS["Signal Bloom"] * brushSizeMultiplier);
   let raw = lerp(signalAmpMin, signalAmpMax, brushIntensity * random(0.5, 1.0));
   let amp = signalMode === "Burn" ? 1.0 / raw : raw;
 
@@ -294,9 +317,9 @@ function applySignalBloom() {
 }
 
 // 4. Spectral Swap Brush
-function applySpectralSwap() {
+function applySpectralSwap(mouseX, mouseY) {
   loadPixels();
-  let r = int(15 * brushSizeMultiplier);
+  let r = int(BRUSH_RADIUS["Spectral Swap"] * brushSizeMultiplier);
   for (let x = -r; x < r; x++) {
     for (let y = -r; y < r; y++) {
       if (!inBrushShape(x, y, r)) continue;
@@ -331,14 +354,14 @@ function applySpectralSwap() {
 }
 
 // 5. Chromatic Aberration Brush
-function applyChromaticAberration() {
+function applyChromaticAberration(mouseX, mouseY, pmouseX, pmouseY) {
   loadPixels();
 
   // Snapshot source pixels — read from this, write to pixels[].
   // Prevents read-after-write contamination that would cause smearing.
   let src = new Uint8ClampedArray(pixels);
 
-  let r = int(20 * brushSizeMultiplier);
+  let r = int(BRUSH_RADIUS["Chromatic Aberration"] * brushSizeMultiplier);
   let speed = dist(mouseX, mouseY, pmouseX, pmouseY);
   let speedBonus = map(speed, 0, 40, 0, 14, true);
   let maxOffset  = int((caMinOffset + speedBonus) * brushIntensity);
@@ -382,14 +405,14 @@ function applyChromaticAberration() {
 }
 
 // 6. Scan Line Brush
-function applyScanLine() {
+function applyScanLine(mouseX, mouseY) {
   loadPixels();
   let src = new Uint8ClampedArray(pixels);
 
   if (scanLineDir === "V") {
     // Column mode — shifts pixels up/down within each column
-    let rX = int(60 * brushSizeMultiplier);
-    let rY = int(80 * brushSizeMultiplier);
+    let rX = int(SCAN_LINE_RADIUS.short * brushSizeMultiplier);
+    let rY = int(SCAN_LINE_RADIUS.long  * brushSizeMultiplier);
 
     for (let x = -rX; x < rX; x++) {
       let px = int(mouseX + x);
@@ -416,8 +439,8 @@ function applyScanLine() {
     }
   } else {
     // Row mode — shifts pixels left/right within each row
-    let rY = int(60 * brushSizeMultiplier);
-    let rX = int(80 * brushSizeMultiplier);
+    let rY = int(SCAN_LINE_RADIUS.short * brushSizeMultiplier);
+    let rX = int(SCAN_LINE_RADIUS.long  * brushSizeMultiplier);
 
     for (let y = -rY; y < rY; y++) {
       let py = int(mouseY + y);
@@ -448,10 +471,10 @@ function applyScanLine() {
 }
 
 // 7. Bitcrush Brush
-function applyBitcrush() {
+function applyBitcrush(mouseX, mouseY) {
   loadPixels();
 
-  let r    = int(30 * brushSizeMultiplier);
+  let r    = int(BRUSH_RADIUS["Bitcrush"] * brushSizeMultiplier);
   let step = 256 / pow(2, bitDepthVal);
 
   if (bitDither) {
@@ -499,10 +522,10 @@ function applyBitcrush() {
 }
 
 // 8. Pixel Sort Brush
-function applyPixelSort() {
+function applyPixelSort(mouseX, mouseY, pmouseX, pmouseY) {
   loadPixels();
 
-  let r = int(40 * brushSizeMultiplier);
+  let r = int(BRUSH_RADIUS["Pixel Sort"] * brushSizeMultiplier);
   let speed = dist(mouseX, mouseY, pmouseX, pmouseY);
   // When nearly stationary default to column sort; otherwise follow movement axis
   let angle = atan2(mouseY - pmouseY, mouseX - pmouseX);
@@ -592,41 +615,30 @@ function applyPixelSort() {
 // UI + Utilities
 // ---------------------------
 function getBrushPad() {
-  const pads = {
-    "Pixel Shift":           55,
-    "Data Noise":            40,
-    "Signal Bloom":          10,
-    "Spectral Swap":         15,
-    "Chromatic Aberration":  20,
-    "Scan Line":             80,
-    "Bitcrush":              30,
-    "Pixel Sort":            40
-  };
-  return int((pads[currentBrush] || 40) * brushSizeMultiplier);
+  if (currentBrush === "Scan Line") {
+    return int(SCAN_LINE_RADIUS.long * brushSizeMultiplier);
+  }
+  // Pixel Shift gets a few extra px of margin since its scatter offset
+  // can land slightly past its base radius.
+  const extra = currentBrush === "Pixel Shift" ? 5 : 0;
+  return int(((BRUSH_RADIUS[currentBrush] || 40) + extra) * brushSizeMultiplier);
 }
 
-function setupUI() {
-  brushSelector = createSelect();
-  brushSelector.position(20, 20);
-  brushSelector.attribute("title", "Select brush");
-  for (let b of brushes) brushSelector.option(b);
-  brushSelector.changed(() => currentBrush = brushSelector.value());
-
-  uploadButton = createFileInput(handleImageUpload);
-  uploadButton.position(160, 20);
-  uploadButton.attribute("accept", "image/png, image/jpeg");
-
-  undoButton = createButton("Undo");
-  undoButton.position(300, 20);
-  undoButton.mousePressed(undoLast);
-
-  clearButton = createButton("Clear");
-  clearButton.position(360, 20);
-  clearButton.mousePressed(resetCanvas);
-
-  saveButton = createButton("Save");
-  saveButton.position(430, 20);
-  saveButton.mousePressed(() => saveCanvas("GlitchArt", "png"));
+// Cursor-preview footprint for a brush, consumed by index.html so the on-screen
+// cursor size always matches BRUSH_RADIUS/SCAN_LINE_RADIUS above with no
+// separate copy of these numbers to keep in sync.
+function getBrushCursorBox(brushName, mult) {
+  if (brushName === "Scan Line") {
+    const short = SCAN_LINE_RADIUS.short * 2 * mult;
+    const long  = SCAN_LINE_RADIUS.long  * 2 * mult;
+    return {
+      width:  Math.round(scanLineDir === "V" ? short : long),
+      height: Math.round(scanLineDir === "V" ? long  : short),
+      rect: true
+    };
+  }
+  const d = Math.round((BRUSH_RADIUS[brushName] || 40) * 2 * mult);
+  return { width: d, height: d, rect: false };
 }
 
 function handleImageUpload(file) {
@@ -709,7 +721,6 @@ function hsbToRgb(h, s, v) {
   }
   return [r * 255, g * 255, b * 255];
 }
-1
 
 
 // ---------------------------
@@ -737,6 +748,40 @@ function randomizeBrush() {
   signalMode        = random(1) < 0.5 ? "Bloom" : "Burn";
 
   if (typeof window.syncRandomizedBrush === 'function') window.syncRandomizedBrush();
+}
+
+
+// ---------------------------
+// Glitch (randomized brush pass over the user's own uploaded/current image)
+// ---------------------------
+
+// Applies a batch of randomized brush dabs — random brush, random params per
+// dab via randomizeBrush(), random position and implied direction — directly
+// onto whatever image is currently loaded (upload or a prior Generate Canvas
+// result). Unlike Generate Canvas, this never touches Lorem Picsum; it only
+// glitches the pixels already on the canvas. The whole pass is one undo step.
+function glitchImage() {
+  if (!userImg || !scaledImg) return;
+
+  const snap = get();
+  history.push({ snapshot: snap, thumb: snap.canvas.toDataURL() });
+  if (history.length > maxHistory) history.shift();
+
+  const passes = floor(random(20, 40));
+  for (let i = 0; i < passes; i++) {
+    randomizeBrush();
+    let mx = random(imgX, imgX + imgW);
+    let my = random(imgY, imgY + imgH);
+    // Give direction-sensitive brushes (Chromatic Aberration, Pixel Sort) a
+    // plausible "previous position" implying motion, without any real mouse.
+    let angle = random(TWO_PI);
+    let d     = random(5, 40);
+    let pmx   = mx - cos(angle) * d;
+    let pmy   = my - sin(angle) * d;
+    paintDab(mx, my, pmx, pmy);
+  }
+
+  if (typeof window.updateHistoryStrip === 'function') window.updateHistoryStrip();
 }
 
 

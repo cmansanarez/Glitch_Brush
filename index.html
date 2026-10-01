@@ -217,6 +217,12 @@
       border-color: rgba(255, 255, 255, 0.3);
     }
 
+    /* Shown when the current brush doesn't use the Shape setting (e.g. Pixel
+       Shift, Scan Line) — the control stays clickable, just visibly inert. */
+    .btn-group.not-applicable {
+      opacity: 0.35;
+    }
+
     /* Contextual brush options panel */
     .ctx-panel {
       display: flex;
@@ -413,6 +419,7 @@
     <label id="upload-label" for="file-input">Upload Image</label>
     <input id="file-input" type="file" accept="image/png, image/jpeg" />
     <button id="generate-btn">Generate Canvas</button>
+    <button id="glitch-btn">Glitch</button>
 
     <div class="divider"></div>
 
@@ -623,6 +630,7 @@
       const clearBtn   = document.getElementById("clear-btn");
       const saveBtn          = document.getElementById("save-btn");
       const generateBtn      = document.getElementById("generate-btn");
+      const glitchBtn        = document.getElementById("glitch-btn");
       const brushCursor      = document.getElementById("brush-cursor");
       const sizeSlider       = document.getElementById("size-slider");
       const sizeValue        = document.getElementById("size-value");
@@ -630,33 +638,15 @@
       const intensityValue   = document.getElementById("intensity-value");
       const bgColorInput     = document.getElementById("bg-color");
 
-      // Brush radius (px) matched to each brush's effect area
-      const brushDiameters = {
-        "Pixel Shift":  100,  // ±50px scatter
-        "Data Noise":    80,  // r=40
-        "Signal Bloom":  20,  // r=10
-        "Spectral Swap":           30,  // r=15
-        "Chromatic Aberration":    40,  // r=20
-        "Scan Line":              120,  // rY=60 (vertical height)
-        "Bitcrush":                60,  // r=30
-        "Pixel Sort":              80,  // r=40
-      };
-
+      // Cursor footprint comes from sketch.js's getBrushCursorBox(), which
+      // derives it from the same BRUSH_RADIUS/SCAN_LINE_RADIUS constants the
+      // brushes themselves use — one source of truth instead of a duplicated map.
       function updateCursorSize() {
         const mult = sizeSlider.value / 100;
-        if (currentBrush === "Scan Line") {
-          // Actual footprint: H = 160×120, V = 120×160
-          const cw = Math.round((scanLineDir === "V" ? 120 : 160) * mult);
-          const ch = Math.round((scanLineDir === "V" ? 160 : 120) * mult);
-          brushCursor.style.width        = cw + "px";
-          brushCursor.style.height       = ch + "px";
-          brushCursor.style.borderRadius = "4px";
-        } else {
-          const d = Math.round((brushDiameters[currentBrush] || 40) * mult);
-          brushCursor.style.width        = d + "px";
-          brushCursor.style.height       = d + "px";
-          brushCursor.style.borderRadius = brushShape === "square" ? "3px" : "50%";
-        }
+        const box = getBrushCursorBox(currentBrush, mult);
+        brushCursor.style.width        = box.width + "px";
+        brushCursor.style.height       = box.height + "px";
+        brushCursor.style.borderRadius = box.rect ? "4px" : (brushShape === "square" ? "3px" : "50%");
       }
 
       // Show/hide cursor only over the p5 canvas
@@ -794,6 +784,7 @@
         generateCanvas();
         hint.classList.add("hidden");
       });
+      glitchBtn.addEventListener("click", () => glitchImage());
       window.hideHint = () => hint.classList.add("hidden");
 
       // ── Brush behavioral hints ───────────────────────────────────────────
@@ -826,6 +817,13 @@
         "Pixel Sort":           "ctx-pixel-sort"
       };
 
+      // Shape (circle/square) has no visible effect on these brushes — Pixel
+      // Shift scatters individual squares regardless, Scan Line is a directional
+      // band. The setting still persists for other brushes; this just signals
+      // it's a no-op right now instead of looking active and doing nothing.
+      const shapelessBrushes = ["Pixel Shift", "Scan Line"];
+      const shapeGroup = document.getElementById("shape-group");
+
       function switchContextPanel(brushName) {
         document.querySelectorAll(".ctx-panel").forEach(p => p.classList.add("hidden"));
         const ctxDivider = document.getElementById("ctx-divider");
@@ -839,6 +837,7 @@
           ctxDivider.classList.add("ctx-hidden");
           ctxLabel.classList.add("ctx-hidden");
         }
+        shapeGroup.classList.toggle("not-applicable", shapelessBrushes.includes(brushName));
       }
 
       switchContextPanel(currentBrush); // initialize on load
